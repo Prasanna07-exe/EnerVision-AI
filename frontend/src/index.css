@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-darkBg text-slate-100 min-h-screen overflow-x-hidden;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+/* Premium Glassmorphism Card Panels */
+.glass-panel {
+  background: rgba(13, 20, 38, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.glass-card-interactive {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card-interactive:hover {
+  background: rgba(18, 28, 54, 0.75);
+  border-color: rgba(0, 242, 254, 0.35);
+  box-shadow: 0 0 20px rgba(0, 242, 254, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Custom Webkit scrollbar for premium panels */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #060913;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #111a30;
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #1d2c52;
+}
+
+/* Animations */
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.6;
+    box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
+  }
+}
+
+.pulse-glow-blue {
+  animation: pulseGlow 3s infinite;
+}

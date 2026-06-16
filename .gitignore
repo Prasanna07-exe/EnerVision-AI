@@ -1,0 +1,75 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nosenv/
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+poetry.lock
+pipfile.lock
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Docker volumes
+postgres_data/
+
+# Frontend (Node / Vite)
+node_modules/
+dist/
+dist-ssr/
+*.local
+.eslintcache
+.stylelintcache
+
+# Large datasets / logs
+*.csv
+*.xlsx
+*.log
+backend/data/
+
+# OS files
+.DS_Store
+Thumbs.db

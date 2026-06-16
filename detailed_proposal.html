@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Proposal: EnerVision AI</title>
+    <style>
+        :root {
+            --primary-color: #1e3a8a;
+            --secondary-color: #2563eb;
+            --text-color: #1f2937;
+            --bg-light: #f9fafb;
+            --border-color: #e5e7eb;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            margin: 0;
+            padding: 40px;
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: #ffffff;
+        }
+        h1, h2, h3, h4 {
+            color: var(--primary-color);
+            font-weight: 700;
+        }
+        h1 {
+            font-size: 2.2rem;
+            border-bottom: 3px solid var(--secondary-color);
+            padding-bottom: 10px;
+            margin-top: 0;
+            text-align: center;
+        }
+        h2 {
+            font-size: 1.6rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+            margin-top: 30px;
+        }
+        h3 {
+            font-size: 1.25rem;
+            margin-top: 20px;
+        }
+        p, li {
+            font-size: 1rem;
+            color: #374151;
+        }
+        ul, ol {
+            margin-bottom: 20px;
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 0.95rem;
+        }
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+        }
+        tr:nth-child(even) {
+            background-color: var(--bg-light);
+        }
+        .equation {
+            background-color: var(--bg-light);
+            border-left: 4px solid var(--secondary-color);
+            padding: 15px;
+            margin: 15px 0;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 1.05rem;
+            text-align: center;
+        }
+        .fraction {
+            display: inline-block;
+            vertical-align: middle;
+            text-align: center;
+            padding: 0 4px;
+        }
+        .fraction > span {
+            display: block;
+            padding: 2px;
+        }
+        .fraction span.numerator {
+            border-bottom: 1px solid var(--text-color);
+        }
+        .diagram-container {
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-light);
+            padding: 25px;
+            border-radius: 6px;
+            margin: 25px 0;
+            font-family: sans-serif;
+        }
+        .flow-step {
+            background: white;
+            border: 2px solid var(--secondary-color);
+            border-radius: 4px;
+            padding: 12px;
+            text-align: center;
+            font-weight: bold;
+            margin: 10px auto;
+            max-width: 500px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .flow-arrow {
+            text-align: center;
+            font-size: 1.5rem;
+            color: var(--secondary-color);
+            margin: 5px 0;
+            font-weight: bold;
+        }
+        .flow-branch {
+            display: flex;
+            justify-content: space-around;
+            max-width: 700px;
+            margin: 15px auto;
+        }
+        .flow-branch-step {
+            background: white;
+            border: 2px dashed var(--secondary-color);
+            border-radius: 4px;
+            padding: 10px;
+            width: 30%;
+            text-align: center;
+            font-size: 0.9rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .alert {
+            background-color: #eff6ff;
+            border-left: 4px solid var(--secondary-color);
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 4px 4px 0;
+        }
+        .alert-title {
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-bottom: 5px;
+        }
+        .pitch-box {
+            background-color: #f3f4f6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid #d1d5db;
+        }
+        .pitch-section {
+            margin-bottom: 15px;
+        }
+        .pitch-section:last-child {
+            margin-bottom: 0;
+        }
+        .pitch-heading {
+            font-weight: bold;
+            color: var(--primary-color);
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+        }
+        @media print {
+            body {
+                padding: 0;
+            }
+            .diagram-container, .equation, .pitch-box {
+                page-break-inside: avoid;
+            }
+            h2, h3 {
+                page-break-after: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Project Proposal & Product Charter: EnerVision AI</h1>
+    <h3 style="text-align: center; color: #6b7280; font-weight: normal; margin-top: -5px; margin-bottom: 30px;">
+        AI-Powered Energy Transition Intelligence Platform
+    </h3>
+
+    <div class="pitch-box">
+        <div class="pitch-section">
+            <div class="pitch-heading">💡 Why do we need this project?</div>
+            <p style="margin: 0; font-size: 0.95rem; color: #4b5563;">
+                The global shift away from fossil fuels to clean energy is the largest economic transition of our time, but it is incredibly complex. If we add solar or wind capacity too quickly without backup power, grids become unstable. If electric vehicle (EV) adoption accelerates, power lines can overload. Sustainability managers and energy grid planners must decide where to invest millions of dollars, yet they are blinded by static reports that only look at the past, or complex code that only data scientists can run.
+            </p>
+        </div>
+        <div style="border-top: 1px solid #e5e7eb; margin: 15px 0;"></div>
+        <div class="pitch-section">
+            <div class="pitch-heading">🚀 What does this project do?</div>
+            <p style="margin: 0; font-size: 0.95rem; color: #4b5563;">
+                EnerVision AI acts like a <strong>"Flight Simulator" for the energy transition</strong>. It consolidates global historical databases and uses machine learning to predict electricity demand, renewable share, and carbon emissions up to 2045. Users can adjust sliders (e.g., Solar Capacity +30%, EV Adoption +50%) and instantly see how emissions and grid load respond. Best of all, it features an <strong>AI Copilot</strong> that translates complex charts into plain-English answers (e.g., <em>"Emissions rose because overall demand growth outpaced solar additions"</em>), giving decision-makers immediate, verified answers without needing a data analyst intermediary.
+            </p>
+        </div>
+    </div>
+
+    <h2>1. Executive Proposal & Problem Statement</h2>
+    
+    <h3>1.1 Objective</h3>
+    <p>
+        <strong>EnerVision AI</strong> is an enterprise-grade decision-support platform designed to analyze, forecast, and explain global energy transition trajectories. It aggregates global datasets, runs multi-model machine learning forecasts, performs real-time policy simulation, and leverages an autonomous Multi-Agent AI system to generate natural language insights.
+    </p>
+
+    <h3>1.2 The Problem</h3>
+    <p>
+        Organizations (policy units, utility companies, corporate sustainability offices) must make capital allocation decisions based on how electricity demand, renewable penetration, and carbon emissions will scale. However:
+    </p>
+    <ul>
+        <li><strong>Historical reporting is static</strong>: Analysts see past numbers, but cannot dynamically test changes (e.g., <em>"What happens if EV sales reach 60% by 2035?"</em>).</li>
+        <li><strong>Tools are siloed</strong>: Data cleaning, ML modeling, and text explanation exist in separate, non-communicating pipelines.</li>
+        <li><strong>Lack of Explainability</strong>: Decision-makers must dig through numerical charts without contextual explanations of <em>why</em> specific trends occur.</li>
+    </ul>
+
+    <h3>1.3 The Solution</h3>
+    <p>
+        EnerVision AI unifies these components into a single, scalable web platform. By combining historical database indexing, predictive ensemble modeling, slider-based real-time recalculation, and a collaborative network of AI agents, it turns raw metrics into clear, actionable transition strategies.
+    </p>
+
+    <h2>2. Data Profile: Source, Fitness, & Engineered Derivatives</h2>
+    <p>
+        To ensure the system's forecasts are reliable and scientifically grounded, the platform utilizes three world-class public energy datasets.
+    </p>
+
+    <h3>2.1 Datasets Used</h3>
+    <ol>
+        <li>
+            <strong>Our World in Data (OWID) Energy Dataset</strong>:
+            Primary source for country-level GDP, population, carbon emissions, fossil fuel production, and total energy consumption from 1900 to present.
+        </li>
+        <li>
+            <strong>Ember Global Electricity Review</strong>:
+            Highly granular annual electricity generation mix by source (coal, gas, wind, solar, hydro, nuclear) measured in Terawatt-hours (TWh).
+        </li>
+        <li>
+            <strong>IEA Global EV Data</strong>:
+            Historical electric vehicle registration counts and market shares by country, used to correlate transport electrification with power grid demand shifts.
+        </li>
+    </ol>
+
+    <h3>2.2 Dataset Fitness & Data Risk Analysis (Honest Evaluation)</h3>
+    <ul>
+        <li>
+            <strong>Completeness</strong>: Excellent for major economies (USA, China, India, Europe). However, smaller developing nations contain missing values for GDP and emissions in early historical periods.
+            <br><em>Mitigation</em>: The ETL pipeline drops pre-1990 data for model training to maintain data consistency and uses forward-fill within countries for demographic features.
+        </li>
+        <li>
+            <strong>Timeliness</strong>: There is an inherent reporting delay. 2025 data is typically compiled and finalized in mid-to-late 2026.
+            <br><em>Mitigation</em>: Projections for the current year are treated as short-term forecasts, establishing a standardized baseline starting at the last fully reported year.
+        </li>
+        <li>
+            <strong>Definitions</strong>: Regional groupings (e.g., "Europe", "Asia Pacific") vary slightly between IEA and OWID.
+            <br><em>Mitigation</em>: The database schema enforces a strict country table mapped to ISO 3-letter codes, discarding aggregate regions in favor of direct country-by-country lookups.
+        </li>
+    </ul>
+
+    <h3>2.3 Engineered Derivatives (Our Derivatives)</h3>
+    <p>Rather than relying solely on raw metrics, we engineer specialized indicators to train the ML models:</p>
+
+    <div class="equation">
+        <strong>Carbon Intensity of Electricity (gCO<sub>2</sub>/kWh)</strong> = 
+        <div class="fraction">
+            <span class="numerator">Emissions (Million Tonnes) &times; 10<sup>6</sup></span>
+            <span>Electricity Generation (TWh) &times; 10<sup>9</sup></span>
+        </div>
+    </div>
+
+    <div class="equation">
+        <strong>Carbon Intensity of GDP (Tonnes CO<sub>2</sub>/USD)</strong> = 
+        <div class="fraction">
+            <span class="numerator">Emissions (Million Tonnes)</span>
+            <span>GDP (USD)</span>
+        </div>
+    </div>
+
+    <div class="equation">
+        <strong>Energy Intensity of GDP (kWh/USD)</strong> = 
+        <div class="fraction">
+            <span class="numerator">Electricity Generation (TWh) &times; 10<sup>9</sup></span>
+            <span>GDP (USD)</span>
+        </div>
+    </div>
+
+    <div class="equation">
+        <strong>Grid Renewable Share (0.0 - 1.0)</strong> = 
+        <div class="fraction">
+            <span class="numerator">Solar Gen + Wind Gen + Hydro Gen</span>
+            <span>Total Electricity Generation</span>
+        </div>
+    </div>
+
+    <h2>3. Tailored Platform Workflow</h2>
+    <p>The platform executes a structured, automated process starting from raw data ingestion to user-facing dynamic reports.</p>
+
+    <div class="diagram-container">
+        <div class="flow-step">1. DATA INGESTION &amp; ETL<br><span style="font-size:0.8rem; font-weight:normal;">Downloads from OWID, Ember, IEA &rarr; Standardizes &amp; loads into PostgreSQL</span></div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-step">2. MACHINE LEARNING ENGINE<br><span style="font-size:0.8rem; font-weight:normal;">Trains LSTM, XGBoost, Prophet &rarr; Evaluates MAPE/RMSE &rarr; Stores best models</span></div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-step">3. CORE ROUTING LAYER (FastAPI API)<br><span style="font-size:0.8rem; font-weight:normal;">Serves baseline forecasts and routes simulation calculations</span></div>
+        
+        <div style="display:flex; justify-content:space-between; max-width:600px; margin: 10px auto;">
+            <div style="width:45%; text-align:center; color:var(--secondary-color); font-weight:bold;">&swarr; (Simulation Path)</div>
+            <div style="width:45%; text-align:center; color:var(--secondary-color); font-weight:bold;">&searr; (AI Chat Path)</div>
+        </div>
+
+        <div class="flow-branch">
+            <div class="flow-branch-step" style="width:45%;">
+                <strong>Scenario Simulator Engine</strong><br>
+                <span style="font-size:0.8rem; color:#4b5563;">Applies sensitivity multipliers to baseline curves dynamically</span>
+            </div>
+            <div class="flow-branch-step" style="width:45%;">
+                <strong>Multi-Agent AI System</strong><br>
+                <span style="font-size:0.8rem; color:#4b5563;">Cooperating agents (Analyst, Validator, Advisor) parse metrics</span>
+            </div>
+        </div>
+        
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-step" style="background-color: var(--primary-color); color: white;">5. INTERACTIVE REACT DASHBOARD<br><span style="font-size:0.8rem; font-weight:normal;">Renders charts, map, sliders, and Agent explanations</span></div>
+    </div>
+
+    <h2>4. What the User Gets: Product Handover &amp; Core Modules</h2>
+
+    <h3>4.1 User Personas &amp; How They Interact</h3>
+    <ul>
+        <li><strong>Sustainability Executives</strong>: View clean, high-level KPI cards, track regional clusters, and download AI-generated markdown reports for board meetings.</li>
+        <li><strong>Energy Grid Analysts</strong>: Adjust simulation sliders to project load changes, check grid reliability scores, and toggle different machine learning forecast curves.</li>
+        <li><strong>Operational Managers</strong>: Type questions directly into the Copilot chat to retrieve metrics without writing SQL or extracting CSV files manually.</li>
+    </ul>
+
+    <h3>4.2 End-User Handover Experience (The 8 Modules)</h3>
+    <ul>
+        <li><strong>Module 1: Global Energy Dashboard</strong>: A dark glassmorphism dashboard showing global generation, renewable ratios, and carbon intensity. An interactive world map highlights country emission levels on hover.</li>
+        <li><strong>Module 2: Forecasting Engine</strong>: Line charts detailing predictions up to 2045. Users can toggle between models (XGBoost, Prophet, PyTorch LSTM) and view confidence intervals.</li>
+        <li><strong>Module 3: Scenario Simulator</strong>: Sliders for Solar Capacity, EV Adoption, and Coal Usage. Moving a slider causes the forecast charts to update instantly.</li>
+        <li><strong>Module 4: Country Intelligence</strong>: A side-by-side explorer. Users select two countries (e.g., China vs. India) to contrast energy mixes, carbon trajectories, and transition timelines.</li>
+        <li><strong>Module 5: Regional Clustering</strong>: A 2D scatter plot mapping countries by GDP per capita vs. Renewable Share, colored by KMeans cluster profile.</li>
+        <li><strong>Module 6: Energy Risk Scoring</strong>: Gauge meters showing Supply Risk (import reliance), Emission Risk (coal dependence), and Transition Readiness.</li>
+        <li><strong>Module 7: LLM Insight Engine</strong>: Informative markdown panels underneath every chart. It automatically translates line changes and anomalies into text explanations.</li>
+        <li><strong>Module 8: Energy Copilot</strong>: A sidebar chat window. Users can type queries (e.g., <em>"Compare India and China emissions"</em>). The chat shows agent thoughts in real-time, followed by formatted tables, bullet points, and dynamic charts.</li>
+    </ul>
+
+    <h3>4.3 Detailed Dashboard User Interface Breakdown</h3>
+    
+    <h4>View 1: Main Overview Dashboard</h4>
+    <p>Displays Global Electricity Consumption KPI with 10-year sparklines, Renewable Mix Share, Global CO2 Emissions, and System Carbon Intensity. Features an interactive world map and a Recharts Stacked Area chart representing fuel mix from 1990 to 2024.</p>
+
+    <h4>View 2: Predictive Forecasting Tab</h4>
+    <p>Provides dropdown selectors for Country, Metric, and Model. Renders historical solid lines alongside forecasted dotted lines with 95% confidence bands. Below sits the model validation matrix (MAE, RMSE, MAPE) and AI-generated textual trends.</p>
+
+    <h4>View 3: Scenario Simulator Sandbox</h4>
+    <p>Incorporates sliders for Solar, Wind, EV Adoption, and Coal. Displays overlays of Baseline vs. Simulated Curves, grid feasibility radar charts, and grid status alerts.</p>
+
+    <h4>View 4: Country Comparison Center</h4>
+    <p>Renders side-by-side KPI comparison cards, emission trajectory overlays, and fuel mix radar charts.</p>
+
+    <h4>View 5: Regional Clustering Map</h4>
+    <p>A scatter chart comparing GDP vs. Renewable Share where colors correspond to country energy profiles.</p>
+
+    <h4>View 6: AI Copilot Workspace</h4>
+    <p>A chat dialogue displaying markdown answers, agent thought logs, and inline charts.</p>
+
+    <h2>5. LLM Copilot &amp; Retrieval-Augmented Generation (RAG) Architecture</h2>
+    <p>The Copilot acts as a specialized assistant that retrieves database context to answer user queries factually, mitigating hallucination risks.</p>
+
+    <div class="alert">
+        <div class="alert-title">Example Copilot Query &amp; Answer</div>
+        <p><strong>Query</strong>: "Why are India's emissions increasing despite solar growth?"</p>
+        <p><strong>Answer</strong>: <em>"While India's solar generation increased by 22% between 2018 and 2024, overall electricity demand expanded by 35% due to economic growth. To meet this incremental demand, coal generation grew by 14% in absolute terms. Therefore, fossil sources still supply the majority of grid additions, causing net emissions to rise."</em></p>
+    </div>
+
+    <h2>6. The Final Output Package (What is Delivered)</h2>
+    <p>At completion, the handover consists of a zipped distribution package containing the following items:</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Deliverable ID</th>
+                <th>Package Element</th>
+                <th>Content Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>D1: Database</strong></td>
+                <td>PostgreSQL Seed Build</td>
+                <td>Initialized relational database seeded with 150+ countries, 35 years of historical metrics (1990-2025), and baseline forecast curves.</td>
+            </tr>
+            <tr>
+                <td><strong>D2: ML Suite</strong></td>
+                <td>Model Registry Binaries</td>
+                <td>Trained models: <code>xgboost_demand_model.joblib</code>, <code>lstm_neural_network.pt</code> (PyTorch), Prophet checkpoints, and validation logs.</td>
+            </tr>
+            <tr>
+                <td><strong>D3: Backend</strong></td>
+                <td>FastAPI API Codebase</td>
+                <td>Asynchronous FastAPI routers, simulation logic endpoints, Pydantic schemas, and Celery background workers.</td>
+            </tr>
+            <tr>
+                <td><strong>D4: AI Layer</strong></td>
+                <td>Multi-Agent Orchestrator</td>
+                <td>Python agent modules (Data Analyst, Validator, Policy Advisor) and Ollama connection configurations.</td>
+            </tr>
+            <tr>
+                <td><strong>D5: Frontend</strong></td>
+                <td>React App Repository</td>
+                <td>Type-safe React + TypeScript monorepo codebase utilizing Recharts visualization and Tailwind styling.</td>
+            </tr>
+            <tr>
+                <td><strong>D6: Deploy</strong></td>
+                <td>Docker Orchestration</td>
+                <td><code>docker-compose.yml</code> file orchestrating Postgres, Redis, backend FastAPI, and React Nginx server.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>7. Technical Stack &amp; Implementation Timeline</h2>
+
+    <h3>7.1 Technology Stack</h3>
+    <ul>
+        <li><strong>Frontend</strong>: React, TypeScript, Tailwind CSS, Recharts.</li>
+        <li><strong>Backend</strong>: FastAPI, SQLAlchemy, Redis, Celery.</li>
+        <li><strong>Database</strong>: PostgreSQL.</li>
+        <li><strong>Machine Learning</strong>: PyTorch (LSTM), XGBoost, LightGBM, Prophet, Scikit-Learn.</li>
+        <li><strong>AI Layer</strong>: Ollama serving <code>qwen2.5:7b</code> locally, with cloud API fallbacks (OpenAI / Anthropic).</li>
+    </ul>
+
+    <h3>7.2 Timeline &amp; Milestones</h3>
+    <ul>
+        <li><strong>Milestone 1 (Days 1–3)</strong>: Docker, DB initialization, and ETL script setups.</li>
+        <li><strong>Milestone 2 (Days 4–6)</strong>: SQLAlchemy models, Alembic migrations, and REST APIs.</li>
+        <li><strong>Milestone 3 (Days 7–10)</strong>: ML training pipelines, model registry, and simulator equations.</li>
+        <li><strong>Milestone 4 (Days 11–13)</strong>: Multi-Agent orchestrator prompts and local Ollama integrations.</li>
+        <li><strong>Milestone 5 (Days 14–18)</strong>: React dashboard pages, Recharts charts, and simulator sliders.</li>
+        <li><strong>Milestone 6 (Days 19–21)</strong>: Unit tests, query optimizations, Swagger documentation, and final deployment.</li>
+    </ul>
+
+</body>
+</html>
