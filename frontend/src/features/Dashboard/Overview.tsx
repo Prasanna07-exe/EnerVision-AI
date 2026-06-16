@@ -5,11 +5,10 @@ import {
   XAxis, 
   YAxis, 
   Tooltip, 
-  ResponsiveContainer,
-  BarChart,
-  Bar
+  ResponsiveContainer
 } from "recharts";
-import { ApiService, KPIData, FuelMixPoint } from "../../services/api";
+import { ApiService } from "../../services/api";
+import type { KPIData, FuelMixPoint } from "../../services/api";
 import { Zap, ShieldAlert, Sparkles, Globe } from "lucide-react";
 
 export const Overview: React.FC = () => {

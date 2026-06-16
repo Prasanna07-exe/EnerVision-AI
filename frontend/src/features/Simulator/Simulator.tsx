@@ -13,7 +13,8 @@ import {
   PolarRadiusAxis,
   Radar
 } from "recharts";
-import { ApiService, Country, SimulationResponse, RiskScores } from "../../services/api";
+import { ApiService } from "../../services/api";
+import type { Country, SimulationResponse, RiskScores } from "../../services/api";
 import { Sliders, Save, RotateCcw, AlertTriangle, ShieldCheck } from "lucide-react";
 
 export const Simulator: React.FC = () => {

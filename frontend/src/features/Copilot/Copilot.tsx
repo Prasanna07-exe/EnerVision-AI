@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Send, Sparkles, MessageSquare, Terminal, Eye, EyeOff } from "lucide-react";
-import { ApiService, ChatMessage, AgentThought } from "../../services/api";
+import { ApiService } from "../../services/api";
+import type { ChatMessage, AgentThought } from "../../services/api";
 
 interface ChatItem extends ChatMessage {
   thoughts?: AgentThought[];
@@ -12,7 +13,7 @@ export const Copilot: React.FC = () => {
     {
       role: "assistant",
       content: (
-        "Welcome to the **EnerVision AI Copilot Workspace**.\n\n"
+        "Welcome to the **EnerVision AI Copilot Workspace**.\n\n" +
         "I am connected to your local database registry and trained models. Ask me questions about global transition metrics, model forecasts, or policy simulation parameters (e.g., *'Why are emissions rising in India?'* or *'Compare China and USA'*)."
       )
     }

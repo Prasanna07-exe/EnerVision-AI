@@ -9,7 +9,8 @@ import {
   ResponsiveContainer,
   Cell
 } from "recharts";
-import { ApiService, ClusterPoint } from "../../services/api";
+import { ApiService } from "../../services/api";
+import type { ClusterPoint } from "../../services/api";
 import { Layers, Globe } from "lucide-react";
 
 const CLUSTER_COLORS = ["#00f2fe", "#39ff14", "#ff416c"];

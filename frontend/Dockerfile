@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /frontend
 
@@ -6,7 +6,7 @@ WORKDIR /frontend
 COPY package*.json ./
 
 # Install packages
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Copy code files
 COPY . .

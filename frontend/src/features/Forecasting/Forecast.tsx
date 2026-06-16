@@ -9,7 +9,8 @@ import {
   ResponsiveContainer,
   CartesianGrid
 } from "recharts";
-import { ApiService, Country, ForecastResponse } from "../../services/api";
+import { ApiService } from "../../services/api";
+import type { Country, ForecastResponse } from "../../services/api";
 import { ShieldCheck, Sparkles } from "lucide-react";
 
 export const Forecast: React.FC = () => {
@@ -142,6 +143,7 @@ export const Forecast: React.FC = () => {
               <option value="ensemble">🚀 Auto-Ensemble Router</option>
               <option value="xgboost">XGBoost Decision Trees</option>
               <option value="prophet">FB Prophet Time Series</option>
+              <option value="lstm">🧠 PyTorch LSTM Deep Learning</option>
               <option value="linear_regression">Linear Regression Baseline</option>
             </select>
           </div>

@@ -7,15 +7,15 @@ import {
   Radar,
   ResponsiveContainer
 } from "recharts";
-import { ApiService, Country, RiskScores } from "../../services/api";
-import { ShieldCheck, ShieldAlert, Sparkles, HelpCircle } from "lucide-react";
+import { ApiService } from "../../services/api";
+import type { Country, RiskScores } from "../../services/api";
+import { Sparkles, HelpCircle } from "lucide-react";
 
 export const Risk: React.FC = () => {
   const [countries, setCountries] = useState<Country[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string>("IND");
   const [scores, setScores] = useState<RiskScores | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
 
   // Load country listings
   useEffect(() => {
@@ -42,7 +42,7 @@ export const Risk: React.FC = () => {
         const res = await ApiService.getRiskScores(selectedCountry);
         setScores(res);
       } catch (err: any) {
-        setError(err.message || "Failed to load risk scores");
+        console.error("Failed to load risk scores:", err);
       } finally {
         setLoading(false);
       }

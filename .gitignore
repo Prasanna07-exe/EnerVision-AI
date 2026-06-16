@@ -73,3 +73,6 @@ backend/data/
 # OS files
 .DS_Store
 Thumbs.db
+
+# ML Model Registry
+backend/app/ml/registry/

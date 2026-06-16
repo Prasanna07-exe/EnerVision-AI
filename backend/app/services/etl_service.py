@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 OWID_URL = "https://nyc3.digitaloceanspaces.com/owid-public/data/energy/owid-energy-data.csv"
-IEA_EV_URL = "https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2023/2023-10-17/ev_sales.csv"
+IEA_EV_URL = "https://raw.githubusercontent.com/janhavi97/Global-EV-Dataset-Analysis/main/Global%20EV%20Data.csv"
 
 def download_and_cache_datasets():
     """Download and cache raw datasets locally to speed up iterations."""
