@@ -1,7 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
+from app.init_db import init_tables
 from app.routers import dashboard, forecast, simulate, risk, cluster, countries, copilot
+
+# Auto-initialize database tables and schema constraints on launch
+try:
+    init_tables()
+except Exception as e:
+    print(f"Database table initialization deferred: {e}")
 
 app = FastAPI(
     title="EnerVision AI Gateway",
