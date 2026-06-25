@@ -561,11 +561,11 @@ export const Clustering: React.FC = () => {
                 {name}
               </span>
               <p className="text-slate-400 leading-relaxed text-[11px]">
-                {idx === 2 
-                  ? "Highly developed or resource-rich nations with high renewable share (hydro, wind, solar) leading the transition."
+                {idx === 0 
+                  ? "Electricity systems where coal, natural gas, or oil remain the dominant sources of generation. Renewable deployment is growing in many countries, but fossil fuels continue to provide most baseload electricity."
                   : idx === 1 
-                  ? "Developing economies with rapid electricity demand expansion. Characterized by rising renewables alongside fossil baseline growth."
-                  : "Developed or wealthy economies reliant primarily on legacy fossil base loads (coal/gas/oil) with low relative renewable shares."
+                  ? "Electricity systems experiencing rapid demand growth and ongoing infrastructure expansion, with increasing investment in renewable energy while maintaining a diversified generation mix."
+                  : "Electricity systems characterized by a high share of low-carbon generation—including hydro, wind, solar, geothermal, and nuclear—supporting lower emissions and advanced energy transition progress."
                 }
               </p>
             </div>

@@ -137,9 +137,9 @@ def generate_pdf_report(
         "Low-Carbon & Renewable-Driven Grid Systems"
     ]
     CLUSTER_DESCS = [
-        "Grid networks characterized by heavy reliance on fossil fuels (coal, gas, or oil) for baseload generation. Focus lies on decarbonization strategies and clean energy investments.",
-        "Grids expanding rapidly to meet rising demand, showing strong clean tech growth (solar/wind/hydro) while transitioning away from legacy fossil fuels.",
-        "Low-carbon and carbon-free power grids driven by massive renewable shares, nuclear generation, and advanced structural decoupling of emissions from generation."
+        "Electricity systems where coal, natural gas, or oil remain the dominant sources of generation. Renewable deployment is growing in many countries, but fossil fuels continue to provide most baseload electricity.",
+        "Electricity systems experiencing rapid demand growth and ongoing infrastructure expansion, with increasing investment in renewable energy while maintaining a diversified generation mix.",
+        "Electricity systems characterized by a high share of low-carbon generation—including hydro, wind, solar, geothermal, and nuclear—supporting lower emissions and advanced energy transition progress."
     ]
     cluster_name = CLUSTER_NAMES[cluster_id] if 0 <= cluster_id < len(CLUSTER_NAMES) else "Unclassified Grid Segment"
     cluster_desc = CLUSTER_DESCS[cluster_id] if 0 <= cluster_id < len(CLUSTER_DESCS) else "No segment details."

@@ -116,77 +116,90 @@ async def chat_copilot(payload: ChatRequest, db: Session = Depends(get_db)):
     )
 
     # 4. Invoke LLM (Cloud Gemini or Local Ollama)
-    async_client = httpx.AsyncClient(timeout=300.0)
+    api_key = settings.GEMINI_API_KEY.strip('\"\' ') if settings.GEMINI_API_KEY else None
+    
     try:
-        if settings.GEMINI_API_KEY:
-            thoughts.append(AgentThought(
-                agent_name="Orchestrator Agent",
-                thought="Assembled data context. Dispatching prompt to cloud Google Gemini model..."
-            ))
-            
-            # Format message history for Google Gemini API
-            contents = []
-            for msg in payload.history[-5:]: # Pass last 5 exchanges
-                role = "user" if msg.role == "user" else "model"
+        async with httpx.AsyncClient() as client:
+            if api_key:
+                thoughts.append(AgentThought(
+                    agent_name="Orchestrator Agent",
+                    thought="Assembled data context. Dispatching prompt to cloud Google Gemini model..."
+                ))
+                
+                # Format message history for Google Gemini API
+                contents = []
+                for msg in payload.history[-5:]: # Pass last 5 exchanges
+                    role = "user" if msg.role == "user" else "model"
+                    contents.append({
+                        "role": role,
+                        "parts": [{"text": msg.content}]
+                    })
                 contents.append({
-                    "role": role,
-                    "parts": [{"text": msg.content}]
+                    "role": "user",
+                    "parts": [{"text": payload.message}]
                 })
-            contents.append({
-                "role": "user",
-                "parts": [{"text": payload.message}]
-            })
-            
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
-            response = await async_client.post(
-                url,
-                json={
-                    "contents": contents,
-                    "systemInstruction": {
-                        "parts": [{"text": system_prompt}]
-                    }
-                },
-                timeout=30.0
-            )
-            response.raise_for_status()
-            res_json = response.json()
-            ai_response = res_json["candidates"][0]["content"]["parts"][0]["text"]
-            
-            thoughts.append(AgentThought(
-                agent_name="Synthesizer Agent",
-                thought="Received response from cloud Gemini model. Validated output and compiling report."
-            ))
-        else:
-            # Format message history for Ollama chat API
-            ollama_messages = [{"role": "system", "content": system_prompt}]
-            for msg in payload.history[-5:]: # Pass last 5 exchanges
-                ollama_messages.append({"role": msg.role, "content": msg.content})
-            ollama_messages.append({"role": "user", "content": payload.message})
+                
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+                
+                try:
+                    response = await client.post(
+                        url,
+                        json={
+                            "contents": contents,
+                            "systemInstruction": {
+                                "parts": [{"text": system_prompt}]
+                            }
+                        },
+                        timeout=30.0
+                    )
+                    if response.status_code != 200:
+                        logger.error(f"Gemini API returned status {response.status_code}: {response.text}")
+                    response.raise_for_status()
+                    res_json = response.json()
+                    ai_response = res_json["candidates"][0]["content"]["parts"][0]["text"]
+                except Exception as api_err:
+                    logger.error(f"Gemini API request failed: {api_err}")
+                    raise api_err
+                
+                thoughts.append(AgentThought(
+                    agent_name="Synthesizer Agent",
+                    thought="Received response from cloud Gemini model. Validated output and compiling report."
+                ))
+            else:
+                # Format message history for Ollama chat API
+                ollama_messages = [{"role": "system", "content": system_prompt}]
+                for msg in payload.history[-5:]: # Pass last 5 exchanges
+                    ollama_messages.append({"role": msg.role, "content": msg.content})
+                ollama_messages.append({"role": "user", "content": payload.message})
 
-            thoughts.append(AgentThought(
-                agent_name="Orchestrator Agent",
-                thought="Assembled data context. Dispatching prompt to local Ollama/Qwen model..."
-            ))
-            
-            url = f"{settings.OLLAMA_URL}/api/chat"
-            response = await async_client.post(
-                url,
-                json={
-                    "model": "qwen2.5:7b",
-                    "messages": ollama_messages,
-                    "stream": False
-                },
-                timeout=300.0
-            )
-            response.raise_for_status()
-            res_json = response.json()
-            ai_response = res_json["message"]["content"]
-            
-            thoughts.append(AgentThought(
-                agent_name="Synthesizer Agent",
-                thought="Received response from local Ollama. Validated output and compiling report."
-            ))
-            
+                thoughts.append(AgentThought(
+                    agent_name="Orchestrator Agent",
+                    thought="Assembled data context. Dispatching prompt to local Ollama/Qwen model..."
+                ))
+                
+                url = f"{settings.OLLAMA_URL}/api/chat"
+                try:
+                    response = await client.post(
+                        url,
+                        json={
+                            "model": "qwen2.5:7b",
+                            "messages": ollama_messages,
+                            "stream": False
+                        },
+                        timeout=300.0
+                    )
+                    response.raise_for_status()
+                    res_json = response.json()
+                    ai_response = res_json["message"]["content"]
+                except Exception as ollama_err:
+                    logger.error(f"Ollama API request failed: {ollama_err}")
+                    raise ollama_err
+                
+                thoughts.append(AgentThought(
+                    agent_name="Synthesizer Agent",
+                    thought="Received response from local Ollama. Validated output and compiling report."
+                ))
+                
         return ChatResponse(
             response=ai_response,
             thoughts=thoughts
@@ -196,11 +209,9 @@ async def chat_copilot(payload: ChatRequest, db: Session = Depends(get_db)):
         logger.error(f"Failed to communicate with LLM: {e}\n{traceback.format_exc()}")
         # Graceful fallback so the application doesn't crash
         return ChatResponse(
-            response=OLLAMA_OFFLINE_MSG if not settings.GEMINI_API_KEY else "The AI Copilot service is currently unavailable. Please verify your internet connection or check API settings.",
+            response=OLLAMA_OFFLINE_MSG if not api_key else "The AI Copilot service is currently unavailable. Please verify your internet connection or check API settings.",
             thoughts=thoughts
         )
-    finally:
-        await async_client.aclose()
 
 @router.get("/report/download/{country_code}")
 def download_report(country_code: str, db: Session = Depends(get_db)):

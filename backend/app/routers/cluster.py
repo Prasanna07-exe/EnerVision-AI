@@ -22,12 +22,15 @@ def get_country_cluster_assignment(
 ) -> int:
     """
     Generalized data-driven classification of country energy transition segments.
-    No hardcoded country codes are used.
+    Override applied for France, UK, and Belgium as requested to match Low-Carbon segment.
     
     0 = Fossil-Intensive Grid Systems (🔴)
     1 = Expanding & Transitioning Energy Systems (🟢)
     2 = Low-Carbon & Renewable-Driven Grid Systems (🔵)
     """
+    # Explicit user overrides for countries with low-carbon electricity systems
+    if code and code.upper() in ("FRA", "GBR", "BEL"):
+        return 2
     # Calculate derived structural metrics
     elec_gen = generation if generation > 0 else 1.0
     nuc_share = nuclear_gen / elec_gen
