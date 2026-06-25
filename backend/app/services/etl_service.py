@@ -92,7 +92,11 @@ def run_etl(db: Session, max_rows: int = None):
     # Merge EV sales share with OWID data
     df_merged = pd.merge(df_owid, df_ev_grouped, on=['country', 'year'], how='left')
 
-    # Fill NaN for EV share with 0.0 (especially for earlier years or countries without EV reporting)
+    # Sort values by country and year to ensure proper forward filling
+    df_merged = df_merged.sort_values(['iso_code', 'year'])
+
+    # Forward fill EV sales share within each country to carry forward the latest known year
+    df_merged['ev_sales_share'] = df_merged.groupby('iso_code')['ev_sales_share'].ffill()
     df_merged['ev_sales_share'] = df_merged['ev_sales_share'].fillna(0.0)
 
     # Fill generation values with 0.0 if NaN
@@ -120,10 +124,10 @@ def run_etl(db: Session, max_rows: int = None):
     df_merged['population'] = df_merged.groupby('iso_code')['population'].ffill().bfill()
     df_merged['gdp'] = df_merged.groupby('iso_code')['gdp'].ffill().bfill()
     
-    # Greenhouse Gas Emissions (in CO2 equivalent) - fill missing values with 0.0 or check alternative column
+    # Greenhouse Gas Emissions (in CO2 equivalent) - forward fill to handle reporting delays
     # OWID uses 'greenhouse_gas_emissions' or 'co2'
     emissions_col = 'greenhouse_gas_emissions' if 'greenhouse_gas_emissions' in df_merged.columns else 'co2'
-    df_merged['emissions_clean'] = df_merged[emissions_col].fillna(0.0)
+    df_merged['emissions_clean'] = df_merged.groupby('iso_code')[emissions_col].ffill().bfill().fillna(0.0)
 
     # 4. Load Data to Database
     logger.info("Starting database loading...")

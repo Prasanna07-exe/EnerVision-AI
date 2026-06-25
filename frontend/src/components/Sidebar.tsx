@@ -1,4 +1,3 @@
-import React from "react";
 import { 
   BarChart3, 
   TrendingUp, 
@@ -6,16 +5,21 @@ import {
   Layers, 
   ShieldAlert, 
   MessageSquare,
-  Zap
+  Zap,
+  Info,
+  X
 } from "lucide-react";
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen = false, onClose }) => {
   const menuItems = [
+    { id: "introduction", label: "Guide & Portal Info", icon: Info },
     { id: "overview", label: "Overview", icon: BarChart3 },
     { id: "forecast", label: "Predictive Forecasts", icon: TrendingUp },
     { id: "simulator", label: "Scenario Simulator", icon: Sliders },
@@ -25,20 +29,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
   ];
 
   return (
-    <aside className="w-64 bg-darkBg border-r border-glassBorder flex flex-col h-screen select-none">
+    <aside className={`w-64 bg-darkBg border-r border-glassBorder flex flex-col h-screen select-none fixed md:static inset-y-0 left-0 z-40 transition-transform duration-300 ease-in-out md:translate-x-0 ${
+      isOpen ? "translate-x-0" : "-translate-x-full"
+    }`}>
       {/* Brand Logo Header */}
-      <div className="p-6 border-b border-glassBorder flex items-center gap-3">
-        <div className="bg-gradient-to-tr from-secondary-color to-neonBlue p-2 rounded-lg pulse-glow-blue">
-          <Zap className="w-5 h-5 text-neonBlue" />
+      <div className="p-6 border-b border-glassBorder flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="relative flex items-center justify-center bg-slate-900/60 border border-slate-700/40 p-2.5 rounded-xl shadow-[0_0_15px_rgba(0,242,254,0.12)]">
+            <Zap className="w-4 h-4 text-neonBlue animate-pulse" />
+            <div className="absolute inset-0 bg-neonBlue/10 blur-md rounded-xl -z-10"></div>
+          </div>
+          <div>
+            <h1 className="font-extrabold text-base tracking-tight text-white flex items-center">
+              EnerVision<span className="text-neonBlue ml-0.5">AI</span>
+            </h1>
+            <span className="text-[9px] text-cyanAccent uppercase tracking-[0.22em] font-bold block mt-0.5">
+              Planning Portal
+            </span>
+          </div>
         </div>
-        <div>
-          <h1 className="font-bold text-lg leading-tight tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-            EnerVision AI
-          </h1>
-          <span className="text-xs text-cyanAccent uppercase tracking-widest font-semibold">
-            Transition Engine
-          </span>
-        </div>
+        {/* Close Button on Mobile */}
+        <button 
+          onClick={onClose} 
+          className="md:hidden p-1.5 text-slate-450 hover:text-slate-100 hover:bg-glassBg/40 rounded-lg transition-colors text-slate-400"
+          aria-label="Close navigation menu"
+        >
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Nav Menu Items */}
@@ -53,8 +70,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
               onClick={() => setActiveTab(item.id)}
               className={`w-full flex items-center gap-4 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 group ${
                 isActive
-                  ? "bg-glassBg text-neonBlue border-l-2 border-neonBlue shadow-neon"
-                  : "text-slate-400 hover:bg-glassBg/40 hover:text-slate-100"
+                  ? "bg-gradient-to-r from-neonBlue/10 to-cyanAccent/5 text-neonBlue border-l-4 border-neonBlue shadow-neon font-semibold"
+                  : "text-slate-400 hover:bg-glassBg/35 hover:text-slate-100 hover:translate-x-1"
               }`}
             >
               <IconComponent 

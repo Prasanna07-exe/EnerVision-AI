@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
 export interface Country {
   id: number;
@@ -185,9 +185,44 @@ export const ApiService = {
     return res.json();
   },
 
+  async getShapExplanation(
+    countryCode: string,
+    metric: string
+  ): Promise<{ base_value: number; prediction_value: number; attributions: Record<string, number> }> {
+    const res = await fetch(`${API_BASE_URL}/forecast/explain/${countryCode}?metric=${metric}`);
+    if (!res.ok) throw new Error("Failed to fetch SHAP explanation");
+    return res.json();
+  },
+
+  async getLSTMAttention(
+    countryCode: string
+  ): Promise<{ years: number[]; attention: number[] }> {
+    const res = await fetch(`${API_BASE_URL}/forecast/attention/${countryCode}`);
+    if (!res.ok) throw new Error("Failed to fetch LSTM attention weights");
+    return res.json();
+  },
+
   async getClusters(): Promise<ClusterPoint[]> {
     const res = await fetch(`${API_BASE_URL}/cluster`);
     if (!res.ok) throw new Error("Failed to fetch clusters");
+    return res.json();
+  },
+
+  async getClusterTimeline(): Promise<Record<string, ClusterPoint[]>> {
+    const res = await fetch(`${API_BASE_URL}/cluster/timeline`);
+    if (!res.ok) throw new Error("Failed to fetch cluster timeline");
+    return res.json();
+  },
+
+  async getCorrelation(
+    codes: string,
+    metric?: string
+  ): Promise<{ mode: string; country?: string; labels: string[]; matrix: number[][] }> {
+    const url = metric 
+      ? `${API_BASE_URL}/dashboard/correlation?codes=${codes}&metric=${metric}`
+      : `${API_BASE_URL}/dashboard/correlation?codes=${codes}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Failed to fetch correlation matrix");
     return res.json();
   },
 

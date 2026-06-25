@@ -40,6 +40,31 @@ def run_simulation(
 
     years = sorted(list(set(b.year for b in baselines)))
     
+    # Fetch latest historical record to compute dynamic sensitivities
+    from app.models.metrics import EnergyMetric
+    
+    latest_metric = db.query(EnergyMetric).filter(
+        EnergyMetric.country_id == country.id
+    ).order_by(EnergyMetric.year.desc()).first()
+    
+    # Defaults in case of missing data
+    coal_share = 0.40
+    renewable_share = 0.20
+    gdp_per_capita = 10000.0
+    
+    if latest_metric:
+        if latest_metric.electricity_generation and latest_metric.electricity_generation > 0:
+            coal_share = (latest_metric.coal_generation or 0.0) / latest_metric.electricity_generation
+        if latest_metric.renewable_share is not None:
+            renewable_share = latest_metric.renewable_share
+        if latest_metric.gdp and latest_metric.population and latest_metric.population > 0:
+            gdp_per_capita = latest_metric.gdp / latest_metric.population
+            
+    # Calculate per-country dynamic elasticity coefficients
+    ev_demand_coef = float(0.25 * (1.0 / (1.0 + gdp_per_capita / 30000.0)))
+    solar_renewable_coef = float(0.60 * (1.0 - renewable_share))
+    coal_emissions_coef = float(0.50 * coal_share)
+
     simulated_demand = []
     simulated_renewables = []
     simulated_emissions = []
@@ -50,19 +75,16 @@ def run_simulation(
         base_renewables = baseline_data.get('renewable_share', {}).get(year, 0.0)
         base_emissions = baseline_data.get('co2_emissions', {}).get(year, 0.0)
 
-        # Formula 1: Grid demand adjusts to EV sales share growth
-        # 100% EV adoption growth scales overall grid demand by 15%
-        demand_factor = 1.0 + (ev_change / 100.0) * 0.15
+        # Formula 1: Grid demand adjusts to EV sales share growth (with dynamic GDP/population sensitivity)
+        demand_factor = 1.0 + (ev_change / 100.0) * ev_demand_coef
         new_demand = base_demand * demand_factor
 
-        # Formula 2: Renewable share adjusts to Solar Capacity expansions
-        # 100% Solar Capacity growth increases renewable share proportionally
-        renewable_factor = 1.0 + (solar_change / 100.0) * 0.50
+        # Formula 2: Renewable share adjusts to Solar Capacity expansions (with diminishing returns based on headroom)
+        renewable_factor = 1.0 + (solar_change / 100.0) * solar_renewable_coef
         new_renewables = np.clip(base_renewables * renewable_factor, 0.0, 1.0)
 
-        # Formula 3: CO2 emissions scale to coal reduction and solar replacement
-        # 100% coal drop decreases emissions by 40%, 100% solar rise decreases emissions by 20%
-        emissions_factor = 1.0 + (coal_change / 100.0) * 0.40 - (solar_change / 100.0) * 0.20
+        # Formula 3: CO2 emissions scale to coal reduction and solar replacement (dependent on historical coal grid dependency)
+        emissions_factor = 1.0 + (coal_change / 100.0) * coal_emissions_coef - (solar_change / 100.0) * 0.20
         new_emissions = np.clip(base_emissions * emissions_factor, 0.0, None)
 
         simulated_demand.append({

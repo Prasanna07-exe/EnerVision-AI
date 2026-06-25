@@ -33,15 +33,16 @@ TARGET_METRICS = {
 }
 
 def project_future_demographics(df_country: pd.DataFrame, future_years: list) -> pd.DataFrame:
-    """Projects future GDP and population up to 2045 using linear trends."""
-    years_hist = df_country['year'].values.reshape(-1, 1)
+    """Projects future GDP and population up to 2045 using linear trends based on the last 15 years of history."""
+    df_recent = df_country.tail(15)
+    years_hist = df_recent['year'].values.reshape(-1, 1)
     
     # Population trend
-    pop_model = LinearRegression().fit(years_hist, df_country['population'].values)
+    pop_model = LinearRegression().fit(years_hist, df_recent['population'].values)
     pop_proj = pop_model.predict(np.array(future_years).reshape(-1, 1))
     
     # GDP trend
-    gdp_model = LinearRegression().fit(years_hist, df_country['gdp'].values)
+    gdp_model = LinearRegression().fit(years_hist, df_recent['gdp'].values)
     gdp_proj = gdp_model.predict(np.array(future_years).reshape(-1, 1))
     
     df_proj = pd.DataFrame({
@@ -61,7 +62,10 @@ def train_and_forecast_all(db: Session):
         return
 
     # 2. Engineer features
-    df = create_lags_and_derivatives(df_raw)
+    df_engineered = create_lags_and_derivatives(df_raw)
+
+    # 3. Filter data to only include years since 2005 for modeling
+    df = df_engineered[df_engineered['year'] >= 2005].copy()
 
     countries = db.query(Country).all()
     future_years = list(range(2025, 2046))
@@ -159,57 +163,100 @@ def train_and_forecast_all(db: Session):
                         mape = np.mean(np.abs((actuals[mask] - preds[mask]) / actuals[mask])) * 100 if mask.any() else 0.0
                         lstm_mapes[api_metric] = mape
                         
-                    # Forecast future years (2025 - 2045) autoregressively
-                    last_5_years_scaled = scaled_data[-seq_length:]
+                    # Fit final LSTM model and scaler on the full historical dataset (up to 2024)
+                    scaler_full = MinMaxScaler()
+                    scaler_full.fit(hist_data)
+                    scaled_data_full = scaler_full.transform(hist_data)
                     
-                    preds_scaled_list = []
-                    current_seq = last_5_years_scaled.copy()
+                    X_all_full, y_all_full = prepare_lstm_sequences(scaled_data_full, seq_length)
+                    X_full_tensor = torch.tensor(X_all_full, dtype=torch.float32)
+                    y_full_tensor = torch.tensor(y_all_full, dtype=torch.float32)
                     
-                    for idx, year in enumerate(future_years):
-                        x_tensor = torch.tensor(current_seq[np.newaxis, :, :], dtype=torch.float32)
-                        with torch.no_grad():
-                            pred_step_scaled = lstm_model(x_tensor).numpy()[0]
-                        preds_scaled_list.append(pred_step_scaled)
+                    lstm_model_full = EnergyLSTM(input_dim=len(lstm_cols), hidden_dim=32, num_layers=2, output_dim=3)
+                    optimizer_full = optim.Adam(lstm_model_full.parameters(), lr=0.01)
+                    criterion_full = nn.MSELoss()
+                    
+                    lstm_model_full.train()
+                    for epoch in range(epochs):
+                        optimizer_full.zero_grad()
+                        outputs = lstm_model_full(X_full_tensor)
+                        loss = criterion_full(outputs, y_full_tensor)
+                        loss.backward()
+                        optimizer_full.step()
                         
-                        # Prepare feature row for next step
-                        demo_row = df_demographics_future.iloc[idx]
-                        pop = demo_row['population']
-                        gdp = demo_row['gdp']
-                        gdp_pc = demo_row['gdp_per_capita']
-                        ev_share = 0.0 # baseline constant
+                    # Forecast future years (2025 - 2045) autoregressively with 100 Monte Carlo Dropout passes using full model
+                    last_5_years_scaled = scaled_data_full[-seq_length:]
+                    n_mc = 100
+                    mc_trajectories = []
+                    
+                    for mc_run in range(n_mc):
+                        preds_scaled_list = []
+                        current_seq = last_5_years_scaled.copy()
                         
-                        dummy_unscaled = np.zeros((1, len(lstm_cols)))
-                        pred_unscaled = inverse_scale_targets(pred_step_scaled[np.newaxis, :], scaler)[0]
-                        pred_unscaled[2] = np.clip(pred_unscaled[2], 0.0, 1.0)
-                        pred_unscaled[0] = np.clip(pred_unscaled[0], 0.0, None)
-                        pred_unscaled[1] = np.clip(pred_unscaled[1], 0.0, None)
+                        for idx, year in enumerate(future_years):
+                            x_tensor = torch.tensor(current_seq[np.newaxis, :, :], dtype=torch.float32)
+                            with torch.no_grad():
+                                pred_step_scaled = lstm_model_full(x_tensor, mc_dropout=True).numpy()[0]
+                            preds_scaled_list.append(pred_step_scaled)
+                            
+                            # Prepare feature row for next step
+                            demo_row = df_demographics_future.iloc[idx]
+                            pop = demo_row['population']
+                            gdp = demo_row['gdp']
+                            gdp_pc = demo_row['gdp_per_capita']
+                            ev_share = 0.0 # baseline constant
+                            
+                            dummy_unscaled = np.zeros((1, len(lstm_cols)))
+                            pred_unscaled = inverse_scale_targets(pred_step_scaled[np.newaxis, :], scaler_full)[0]
+                            pred_unscaled[2] = np.clip(pred_unscaled[2], 0.0, 1.0)
+                            pred_unscaled[0] = np.clip(pred_unscaled[0], 0.0, None)
+                            pred_unscaled[1] = np.clip(pred_unscaled[1], 0.0, None)
+                            
+                            dummy_unscaled[0, 0] = pred_unscaled[0]
+                            dummy_unscaled[0, 1] = pred_unscaled[1]
+                            dummy_unscaled[0, 2] = pred_unscaled[2]
+                            dummy_unscaled[0, 3] = pop
+                            dummy_unscaled[0, 4] = gdp
+                            dummy_unscaled[0, 5] = gdp_pc
+                            dummy_unscaled[0, 6] = ev_share
+                            
+                            row_scaled = scaler_full.transform(dummy_unscaled)[0]
+                            current_seq = np.vstack([current_seq[1:], row_scaled])
                         
-                        dummy_unscaled[0, 0] = pred_unscaled[0]
-                        dummy_unscaled[0, 1] = pred_unscaled[1]
-                        dummy_unscaled[0, 2] = pred_unscaled[2]
-                        dummy_unscaled[0, 3] = pop
-                        dummy_unscaled[0, 4] = gdp
-                        dummy_unscaled[0, 5] = gdp_pc
-                        dummy_unscaled[0, 6] = ev_share
+                        traj_unscaled = inverse_scale_targets(np.array(preds_scaled_list), scaler_full)
+                        mc_trajectories.append(traj_unscaled)
                         
-                        row_scaled = scaler.transform(dummy_unscaled)[0]
-                        current_seq = np.vstack([current_seq[1:], row_scaled])
-                        
-                    lstm_future_preds = inverse_scale_targets(np.array(preds_scaled_list), scaler)
+                    mc_trajectories = np.array(mc_trajectories)
+                    lstm_future_preds = mc_trajectories.mean(axis=0)
+                    lstm_lower_preds = np.percentile(mc_trajectories, 2.5, axis=0)
+                    lstm_upper_preds = np.percentile(mc_trajectories, 97.5, axis=0)
+                    
+                    lstm_lower_future = {}
+                    lstm_upper_future = {}
                     
                     # Store forecasts in dict
                     for i, (raw_metric, api_metric) in enumerate(TARGET_METRICS.items()):
                         p = lstm_future_preds[:, i]
+                        low = lstm_lower_preds[:, i]
+                        upp = lstm_upper_preds[:, i]
+                        
                         if raw_metric == 'renewable_share':
                             p = np.clip(p, 0.0, 1.0)
+                            low = np.clip(low, 0.0, 1.0)
+                            upp = np.clip(upp, 0.0, 1.0)
                         else:
                             p = np.clip(p, 0.0, None)
+                            low = np.clip(low, 0.0, None)
+                            upp = np.clip(upp, 0.0, None)
+                            
                         lstm_preds_future[api_metric] = p
+                        lstm_lower_future[api_metric] = low
+                        lstm_upper_future[api_metric] = upp
                         
                     has_lstm = True
                     # Save LSTM model weights to registry
-                    torch.save(lstm_model.state_dict(), os.path.join(REGISTRY_DIR, f"{country.code}_lstm.pt"))
-                    joblib.dump(scaler, os.path.join(REGISTRY_DIR, f"{country.code}_lstm_scaler.joblib"))
+                    torch.save(lstm_model_full.state_dict(), os.path.join(REGISTRY_DIR, f"{country.code}_lstm.pt"))
+                    joblib.dump(scaler_full, os.path.join(REGISTRY_DIR, f"{country.code}_lstm_scaler.joblib"))
         except Exception as e:
             logger.error(f"Failed to train LSTM for {country.code}: {str(e)}")
             has_lstm = False
@@ -245,7 +292,23 @@ def train_and_forecast_all(db: Session):
             lr_val_preds = lr_model.predict(X_val[['year', 'population', 'gdp']])
             lr_mape = np.mean(np.abs((y_val_arr[mask] - lr_val_preds[mask]) / y_val_arr[mask])) * 100 if mask.any() else 0.0
 
-            # XGBoost forecasts
+            # --- FIT FINAL MODELS ON ALL HISTORICAL DATA ---
+            X_full = pd.concat([X_train, X_val])
+            y_full = pd.concat([y_train, y_val])
+
+            # Train final XGBoost
+            xgb_model_full = XGBoostForecaster()
+            xgb_model_full.fit(X_full, y_full)
+
+            # Train final Prophet
+            prophet_model_full = ProphetForecaster()
+            prophet_model_full.fit(df_country[df_country['year'] <= 2024], raw_metric)
+
+            # Train final Linear Regression
+            lr_model_full = LinearRegression()
+            lr_model_full.fit(X_full[['year', 'population', 'gdp']], y_full)
+
+            # XGBoost forecasts (using final full model)
             xgb_preds = []
             current_metrics = df_country.iloc[-1].to_dict()
             historical_lookups = df_country.set_index('year').to_dict('index')
@@ -285,7 +348,7 @@ def train_and_forecast_all(db: Session):
                     'ev_sales_share': 0.0
                 }])
 
-                pred_val = xgb_model.predict(feature_row)[0]
+                pred_val = xgb_model_full.predict(feature_row)[0]
                 xgb_preds.append(pred_val)
             xgb_preds = np.array(xgb_preds)
             if raw_metric == 'renewable_share':
@@ -293,15 +356,15 @@ def train_and_forecast_all(db: Session):
             else:
                 xgb_preds = np.clip(xgb_preds, 0.0, None)
 
-            # Prophet forecasts
-            prophet_preds = prophet_model.predict(future_years)
+            # Prophet forecasts (using final full model)
+            prophet_preds = prophet_model_full.predict(future_years)
             if raw_metric == 'renewable_share':
                 prophet_preds = np.clip(prophet_preds, 0.0, 1.0)
             else:
                 prophet_preds = np.clip(prophet_preds, 0.0, None)
 
-            # Linear regression forecasts
-            lr_preds = lr_model.predict(df_demographics_future[['year', 'population', 'gdp']])
+            # Linear regression forecasts (using final full model)
+            lr_preds = lr_model_full.predict(df_demographics_future[['year', 'population', 'gdp']])
             if raw_metric == 'renewable_share':
                 lr_preds = np.clip(lr_preds, 0.0, 1.0)
             else:
@@ -315,6 +378,8 @@ def train_and_forecast_all(db: Session):
             best_model_name = 'xgboost'
             best_mape = xgb_mape
             best_preds = xgb_preds
+            best_lower = None
+            best_upper = None
             
             if prophet_mape < best_mape and prophet_mape > 0:
                 best_model_name = 'prophet'
@@ -328,19 +393,25 @@ def train_and_forecast_all(db: Session):
                 best_model_name = 'lstm'
                 best_mape = lstm_mape
                 best_preds = lstm_preds
+                best_lower = lstm_lower_future.get(api_metric)
+                best_upper = lstm_upper_future.get(api_metric)
 
             # Save models to registry
-            joblib.dump(xgb_model, os.path.join(REGISTRY_DIR, f"{country.code}_{api_metric}_xgb.joblib"))
-            joblib.dump(lr_model, os.path.join(REGISTRY_DIR, f"{country.code}_{api_metric}_lr.joblib"))
+            joblib.dump(xgb_model_full, os.path.join(REGISTRY_DIR, f"{country.code}_{api_metric}_xgb.joblib"))
+            joblib.dump(lr_model_full, os.path.join(REGISTRY_DIR, f"{country.code}_{api_metric}_lr.joblib"))
 
             # Log model audit info
             logger.info(f"  Metric: {api_metric} | Validation MAPEs -> XGBoost: {xgb_mape:.2f}%, Prophet: {prophet_mape:.2f}%, Linear: {lr_mape:.2f}%, LSTM: {lstm_mape:.2f}% (Best: {best_model_name})")
 
             # Helper function to save forecasts to DB
-            def save_forecast(model_name_db, preds_arr, mape_val):
-                std_err = (mape_val / 100.0) * preds_arr
-                confidence_lower = np.clip(preds_arr - 1.96 * std_err, 0.0 if raw_metric != 'renewable_share' else 0.0, None if raw_metric != 'renewable_share' else 1.0)
-                confidence_upper = np.clip(preds_arr + 1.96 * std_err, 0.0, None if raw_metric != 'renewable_share' else 1.0)
+            def save_forecast(model_name_db, preds_arr, mape_val, lower_arr=None, upper_arr=None):
+                if lower_arr is not None and upper_arr is not None:
+                    confidence_lower = lower_arr
+                    confidence_upper = upper_arr
+                else:
+                    std_err = (mape_val / 100.0) * preds_arr
+                    confidence_lower = np.clip(preds_arr - 1.96 * std_err, 0.0 if raw_metric != 'renewable_share' else 0.0, None if raw_metric != 'renewable_share' else 1.0)
+                    confidence_upper = np.clip(preds_arr + 1.96 * std_err, 0.0, None if raw_metric != 'renewable_share' else 1.0)
                 
                 for i, year in enumerate(future_years):
                     forecast_db = ForecastResult(
@@ -360,10 +431,28 @@ def train_and_forecast_all(db: Session):
                 save_forecast('prophet', prophet_preds, prophet_mape)
             save_forecast('linear_regression', lr_preds, lr_mape)
             if has_lstm and lstm_preds is not None:
-                save_forecast('lstm', lstm_preds, lstm_mape)
+                save_forecast('lstm', lstm_preds, lstm_mape,
+                              lower_arr=lstm_lower_future.get(api_metric),
+                              upper_arr=lstm_upper_future.get(api_metric))
             
-            # Save the best model under 'ensemble'
-            save_forecast('ensemble', best_preds, best_mape)
+            # Calculate the ensemble prediction as a weighted combination of all three models:
+            # 40% Linear Regression (for trend extrapolation), 30% LSTM, 30% XGBoost.
+            # If LSTM failed to train, we use 60% Linear Regression, 40% XGBoost.
+            if has_lstm and lstm_preds is not None:
+                ensemble_preds = 0.4 * lr_preds + 0.3 * lstm_preds + 0.3 * xgb_preds
+                ensemble_mape = 0.4 * lr_mape + 0.3 * lstm_mape + 0.3 * xgb_mape
+            else:
+                ensemble_preds = 0.6 * lr_preds + 0.4 * xgb_preds
+                ensemble_mape = 0.6 * lr_mape + 0.4 * xgb_mape
+
+            # Clip the ensemble predictions
+            if raw_metric == 'renewable_share':
+                ensemble_preds = np.clip(ensemble_preds, 0.0, 1.0)
+            else:
+                ensemble_preds = np.clip(ensemble_preds, 0.0, None)
+
+            # Save the ensemble forecast
+            save_forecast('ensemble', ensemble_preds, ensemble_mape, best_lower, best_upper)
             
             db.commit()
 

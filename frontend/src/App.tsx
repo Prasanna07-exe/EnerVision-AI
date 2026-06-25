@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Layout } from "./components/Layout";
+import { Introduction } from "./features/Introduction/Introduction";
 import { Overview } from "./features/Dashboard/Overview";
 import { Forecast } from "./features/Forecasting/Forecast";
 import { Simulator } from "./features/Simulator/Simulator";
@@ -8,11 +9,12 @@ import { Risk } from "./features/Risk/Risk";
 import { Copilot } from "./features/Copilot/Copilot";
 
 function App() {
-  // Manage the selected nav section tab
-  const [activeTab, setActiveTab] = useState<string>("overview");
+  // Manage the selected nav section tab (landing on Introduction by default)
+  const [activeTab, setActiveTab] = useState<string>("introduction");
 
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
+      {activeTab === "introduction" && <Introduction setActiveTab={setActiveTab} />}
       {activeTab === "overview" && <Overview />}
       {activeTab === "forecast" && <Forecast />}
       {activeTab === "simulator" && <Simulator />}

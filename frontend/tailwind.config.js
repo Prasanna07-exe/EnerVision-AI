@@ -14,14 +14,16 @@ export default {
         neonGreen: "#39ff14",
         neonRed: "#ff416c",
         cyanAccent: "#00b4d8",
+        "secondary-color": "#00b4d8",
       },
       fontFamily: {
         sans: ["Inter", "sans-serif"],
       },
       boxShadow: {
-        neon: "0 0 15px rgba(0, 242, 254, 0.3)",
-        neonGreen: "0 0 15px rgba(57, 255, 20, 0.3)",
-        neonRed: "0 0 15px rgba(255, 65, 108, 0.3)",
+        neon: "0 0 12px rgba(0, 242, 254, 0.25)",
+        neonGreen: "0 0 12px rgba(57, 255, 20, 0.25)",
+        neonRed: "0 0 12px rgba(255, 65, 108, 0.25)",
+        glass: "0 8px 32px 0 rgba(0, 0, 0, 0.37)",
       }
     },
   },
