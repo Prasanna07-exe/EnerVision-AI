@@ -47,25 +47,99 @@ async def chat_copilot(payload: ChatRequest, db: Session = Depends(get_db)):
             thought=f"Detected country target '{matched_country.name}' in prompt. Executing SQL to fetch historical metrics and predictions..."
         ))
 
-        # Fetch latest metrics
-        latest = db.query(EnergyMetric).filter(
+        # Fetch historical trend
+        history = db.query(EnergyMetric).filter(
             EnergyMetric.country_id == matched_country.id
-        ).order_by(EnergyMetric.year.desc()).first()
+        ).order_by(EnergyMetric.year).all()
+        
+        hist_lines = []
+        target_years = {1990, 1995, 2000, 2005, 2010, 2015, 2020, 2024}
+        latest = None
+        for h in history:
+            latest = h
+            if h.year in target_years or h.year == history[-1].year:
+                renew_pct = (h.renewable_share * 100.0) if h.renewable_share <= 1.0 else h.renewable_share
+                gen = h.electricity_generation if h.electricity_generation > 0 else 1.0
+                fossil_pct = ((h.coal_generation or 0.0) + (h.gas_generation or 0.0)) / gen * 100.0
+                hist_lines.append(
+                    f"  - Year {h.year}: Generation = {h.electricity_generation:.1f} TWh, CO2 = {h.emissions:.1f} Mt, Renewables = {renew_pct:.1f}%, Fossil Share = {fossil_pct:.1f}%"
+                )
+        hist_val = "\n".join(hist_lines) if hist_lines else "  - No historical records"
 
-        # Fetch sample baseline forecasts
+        # Fetch ensemble forecasts
         forecasts = db.query(ForecastResult).filter(
-            ForecastResult.country_id == matched_country.id
+            ForecastResult.country_id == matched_country.id,
+            ForecastResult.model_name == 'ensemble'
         ).order_by(ForecastResult.year).all()
+        
+        fore_map = {}
+        for f in forecasts:
+            y = f.year
+            if y not in fore_map:
+                fore_map[y] = {}
+            fore_map[y][f.metric_name] = f.predicted_value
+            
+        fore_lines = []
+        for y in sorted(fore_map.keys()):
+            if y in {2025, 2030, 2035, 2040, 2045}:
+                demand = fore_map[y].get("electricity_demand", 0.0)
+                emissions = fore_map[y].get("co2_emissions", 0.0)
+                renew_share = fore_map[y].get("renewable_share", 0.0)
+                renew_pct = renew_share * 100.0 if renew_share <= 1.0 else renew_share
+                
+                fore_lines.append(
+                    f"  - Year {y}: Projected Demand = {demand:.1f} TWh, Projected CO2 = {emissions:.1f} Mt, Projected Renewables = {renew_pct:.1f}%"
+                )
+        fore_val = "\n".join(fore_lines) if fore_lines else "  - No baseline forecasts"
 
-        # Build context
-        hist_val = f"Renewable Share: {latest.renewable_share:.2f}, CO2 Emissions: {latest.emissions:.1f}M tonnes, Total Gen: {latest.electricity_generation:.1f} TWh" if latest else "No historical records"
-        fore_val = ", ".join([f"{f.year}: demand={f.predicted_value:.1f} TWh, emissions={f.confidence_upper:.1f}" for f in forecasts[:3]]) if forecasts else "No baseline forecasts"
+        # Calculate Risk Scores
+        from app.services.risk_service import calculate_risk_scores
+        risk_scores = calculate_risk_scores(db, matched_country.code)
+        risk_val = (
+            f"  - Transition Readiness Score: {risk_scores.get('transition_readiness', 50)}/100 (Higher is better)\n"
+            f"  - Supply Risk Score: {risk_scores.get('supply_risk', 50)}/100 (Lower is better)\n"
+            f"  - Emission Risk Score: {risk_scores.get('emission_risk', 50)}/100 (Lower is better)"
+        )
+
+        # Get Clustering Segment
+        from app.routers.cluster import get_country_cluster_assignment
+        cluster_name = "Expanding & Transitioning Energy Systems"
+        cluster_desc = "Grid network transition segment"
+        if latest:
+            gdp_pc = (latest.gdp / latest.population) if latest.population and latest.population > 0 else 0.0
+            gdp_pc = min(gdp_pc, 100000.0)
+            cluster_id = get_country_cluster_assignment(
+                matched_country.code,
+                gdp_pc,
+                latest.renewable_share or 0.0,
+                latest.emissions or 0.0,
+                latest.electricity_generation or 0.0,
+                coal_gen=latest.coal_generation or 0.0,
+                gas_gen=latest.gas_generation or 0.0,
+                nuclear_gen=latest.nuclear_generation or 0.0
+            )
+            CLUSTER_NAMES = [
+                "Fossil-Intensive Grid Systems (🔴 Group 0)",
+                "Expanding & Transitioning Energy Systems (🟢 Group 1)",
+                "Low-Carbon & Renewable-Driven Grid Systems (🔵 Group 2)"
+            ]
+            CLUSTER_DESCS = [
+                "Electricity systems where coal, natural gas, or oil remain the dominant sources of generation. Renewable deployment is growing in many countries, but fossil fuels continue to provide most baseload electricity.",
+                "Electricity systems experiencing rapid demand growth and ongoing infrastructure expansion, with increasing investment in renewable energy while maintaining a diversified generation mix.",
+                "Electricity systems characterized by a high share of low-carbon generation—including hydro, wind, solar, geothermal, and nuclear—supporting lower emissions and advanced energy transition progress."
+            ]
+            if 0 <= cluster_id < len(CLUSTER_NAMES):
+                cluster_name = CLUSTER_NAMES[cluster_id]
+                cluster_desc = CLUSTER_DESCS[cluster_id]
+                
+        cluster_val = f"  - Assigned Segment: {cluster_name}\n  - Segment Characteristics: {cluster_desc}"
 
         context_str = (
-            f"Country Context:\n"
-            f"- Name: {matched_country.name} ({matched_country.code})\n"
-            f"- Historical (latest year): {hist_val}\n"
-            f"- Forecast Highlights: {fore_val}\n"
+            f"Sovereign Energy Profile: {matched_country.name} ({matched_country.code})\n\n"
+            f"1. Transition Risk Audit & Readiness:\n{risk_val}\n\n"
+            f"2. Grid Classification & Segment:\n{cluster_val}\n\n"
+            f"3. Historical Ingestion Trend (Benchmark Years):\n{hist_val}\n\n"
+            f"4. Deep Learning Weighted Ensemble Forecast (Benchmark Years):\n{fore_val}\n"
         )
         
         # Policy Agent thought
@@ -80,13 +154,36 @@ async def chat_copilot(payload: ChatRequest, db: Session = Depends(get_db)):
             thought="No specific country keyword detected. Querying database for overall global aggregates..."
         ))
         
-        latest_year = db.query(func.max(EnergyMetric.year)).scalar() if hasattr(db, 'query') else None
-        if latest_year:
-            global_gen = db.query(func.sum(EnergyMetric.electricity_generation)).filter(EnergyMetric.year == latest_year).scalar() or 0.0
-            global_em = db.query(func.sum(EnergyMetric.emissions)).filter(EnergyMetric.year == latest_year).scalar() or 0.0
-            context_str = f"Global Context for year {latest_year}:\n- Total Generation: {global_gen:.1f} TWh\n- Total Emissions: {global_em:.1f} Million Tonnes CO2\n"
-        else:
-            context_str = "Global Context: No data loaded yet."
+        latest_year = db.query(func.max(EnergyMetric.year)).scalar() or 2024
+        global_hist = []
+        for y in [2000, 2010, 2020, latest_year]:
+            gen = db.query(func.sum(EnergyMetric.electricity_generation)).filter(EnergyMetric.year == y).scalar() or 0.0
+            em = db.query(func.sum(EnergyMetric.emissions)).filter(EnergyMetric.year == y).scalar() or 0.0
+            if gen > 0:
+                global_hist.append(f"  - Year {y}: Global Generation = {gen:.1f} TWh, Global Emissions = {em:.1f} Mt CO2")
+        hist_val = "\n".join(global_hist) if global_hist else "  - No global historical records"
+
+        global_fore = []
+        for y in [2025, 2030, 2035, 2040, 2045]:
+            demand = db.query(func.sum(ForecastResult.predicted_value)).filter(
+                ForecastResult.year == y,
+                ForecastResult.model_name == 'ensemble',
+                ForecastResult.metric_name == 'electricity_demand'
+            ).scalar() or 0.0
+            em = db.query(func.sum(ForecastResult.predicted_value)).filter(
+                ForecastResult.year == y,
+                ForecastResult.model_name == 'ensemble',
+                ForecastResult.metric_name == 'co2_emissions'
+            ).scalar() or 0.0
+            if demand > 0:
+                global_fore.append(f"  - Year {y}: Global Projected Demand = {demand:.1f} TWh, Global Projected CO2 = {em:.1f} Mt")
+        fore_val = "\n".join(global_fore) if global_fore else "  - No global forecast records"
+
+        context_str = (
+            f"Global Energy Profile (Aggregated Across 156 Countries)\n\n"
+            f"1. Global Historical Aggregates:\n{hist_val}\n\n"
+            f"2. Global Weighted Ensemble Forecasts:\n{fore_val}\n"
+        )
 
     # 3. Construct System Prompt & Message History
     system_prompt = (
