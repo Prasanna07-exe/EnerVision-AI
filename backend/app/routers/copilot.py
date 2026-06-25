@@ -207,9 +207,24 @@ async def chat_copilot(payload: ChatRequest, db: Session = Depends(get_db)):
     except Exception as e:
         import traceback
         logger.error(f"Failed to communicate with LLM: {e}\n{traceback.format_exc()}")
-        # Graceful fallback so the application doesn't crash
+        
+        detail_msg = str(e)
+        if isinstance(e, httpx.HTTPStatusError):
+            try:
+                err_json = e.response.json()
+                if "error" in err_json and "message" in err_json["error"]:
+                    detail_msg = f"Gemini API Error: {err_json['error']['message']}"
+                else:
+                    detail_msg = f"Gemini API HTTP {e.response.status_code}: {e.response.text[:200]}"
+            except Exception:
+                detail_msg = f"Gemini API HTTP {e.response.status_code}"
+                
+        fallback_msg = (
+            OLLAMA_OFFLINE_MSG if not api_key 
+            else f"The AI Copilot service is currently unavailable. Please verify your internet connection or check API settings.\n\n**Error Detail:** `{detail_msg}`"
+        )
         return ChatResponse(
-            response=OLLAMA_OFFLINE_MSG if not api_key else "The AI Copilot service is currently unavailable. Please verify your internet connection or check API settings.",
+            response=fallback_msg,
             thoughts=thoughts
         )
 
