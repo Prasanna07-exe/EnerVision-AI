@@ -115,13 +115,23 @@ async def chat_copilot(payload: ChatRequest, db: Session = Depends(get_db)):
         f"[DATA CONTEXT]\n{context_str}\n"
     )
 
-    # 4. Invoke LLM (Cloud Gemini or Local Ollama)
-    api_key = settings.GEMINI_API_KEY.strip('\"\' ') if settings.GEMINI_API_KEY else None
+    # 4. Invoke LLM (Cloud Gemini, Groq, OpenRouter or Local Ollama)
+    gemini_key = settings.GEMINI_API_KEY.strip('\"\' ') if settings.GEMINI_API_KEY else None
+    groq_key = settings.GROQ_API_KEY.strip('\"\' ') if settings.GROQ_API_KEY else None
+    openrouter_key = settings.OPENROUTER_API_KEY.strip('\"\' ') if settings.OPENROUTER_API_KEY else None
     
+    active_cloud_provider = None
+    if gemini_key:
+        active_cloud_provider = "gemini"
+    elif groq_key:
+        active_cloud_provider = "groq"
+    elif openrouter_key:
+        active_cloud_provider = "openrouter"
+        
     try:
         async with httpx.AsyncClient() as client:
-            if api_key:
-                key_masked = f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else "too_short"
+            if active_cloud_provider == "gemini":
+                key_masked = f"{gemini_key[:4]}...{gemini_key[-4:]}" if len(gemini_key) > 8 else "too_short"
                 thoughts.append(AgentThought(
                     agent_name="Orchestrator Agent",
                     thought=f"Assembled data context. Dispatching prompt to cloud Google Gemini model (Key: {key_masked})..."
@@ -145,7 +155,7 @@ async def chat_copilot(payload: ChatRequest, db: Session = Depends(get_db)):
                 last_err = None
                 
                 for model_name in models_to_try:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
                     logger.info(f"Attempting to query Gemini model: {model_name}")
                     try:
                         response = await client.post(
@@ -184,6 +194,120 @@ async def chat_copilot(payload: ChatRequest, db: Session = Depends(get_db)):
                     agent_name="Synthesizer Agent",
                     thought="Received response from cloud Gemini model. Validated output and compiling report."
                 ))
+                
+            elif active_cloud_provider == "groq":
+                key_masked = f"{groq_key[:6]}...{groq_key[-4:]}" if len(groq_key) > 10 else "too_short"
+                thoughts.append(AgentThought(
+                    agent_name="Orchestrator Agent",
+                    thought=f"Assembled data context. Dispatching prompt to cloud Groq Llama model (Key: {key_masked})..."
+                ))
+                
+                # Format message history in OpenAI format
+                openai_messages = [{"role": "system", "content": system_prompt}]
+                for msg in payload.history[-5:]:
+                    role = "user" if msg.role == "user" else "assistant"
+                    openai_messages.append({"role": role, "content": msg.content})
+                openai_messages.append({"role": "user", "content": payload.message})
+                
+                groq_models = ["llama-3.3-70b-specdec", "llama-3.1-8b-instant", "mixtral-8x7b-32768"]
+                ai_response = None
+                last_err = None
+                
+                for model_name in groq_models:
+                    url = "https://api.groq.com/openai/v1/chat/completions"
+                    headers = {
+                        "Authorization": f"Bearer {groq_key}",
+                        "Content-Type": "application/json"
+                    }
+                    try:
+                        response = await client.post(
+                            url,
+                            headers=headers,
+                            json={
+                                "model": model_name,
+                                "messages": openai_messages,
+                                "temperature": 0.2
+                            },
+                            timeout=30.0
+                        )
+                        if response.status_code != 200:
+                            logger.error(f"Groq API returned status {response.status_code} for {model_name}: {response.text}")
+                        response.raise_for_status()
+                        res_json = response.json()
+                        ai_response = res_json["choices"][0]["message"]["content"]
+                        break
+                    except Exception as api_err:
+                        last_err = api_err
+                        logger.error(f"Groq API request failed for {model_name}: {api_err}")
+                        
+                if not ai_response:
+                    if last_err:
+                        raise last_err
+                    else:
+                        raise Exception("All attempted Groq models failed.")
+                        
+                thoughts.append(AgentThought(
+                    agent_name="Synthesizer Agent",
+                    thought="Received response from cloud Groq model. Validated output and compiling report."
+                ))
+                
+            elif active_cloud_provider == "openrouter":
+                key_masked = f"{openrouter_key[:6]}...{openrouter_key[-4:]}" if len(openrouter_key) > 10 else "too_short"
+                thoughts.append(AgentThought(
+                    agent_name="Orchestrator Agent",
+                    thought=f"Assembled data context. Dispatching prompt to cloud OpenRouter model (Key: {key_masked})..."
+                ))
+                
+                openai_messages = [{"role": "system", "content": system_prompt}]
+                for msg in payload.history[-5:]:
+                    role = "user" if msg.role == "user" else "assistant"
+                    openai_messages.append({"role": role, "content": msg.content})
+                openai_messages.append({"role": "user", "content": payload.message})
+                
+                openrouter_models = ["google/gemini-2.0-flash-exp:free", "meta-llama/llama-3-8b-instruct:free", "google/gemma-2-9b-it:free"]
+                ai_response = None
+                last_err = None
+                
+                for model_name in openrouter_models:
+                    url = "https://openrouter.ai/api/v1/chat/completions"
+                    headers = {
+                        "Authorization": f"Bearer {openrouter_key}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://enervision-ai.onrender.com",
+                        "X-Title": "EnerVision AI"
+                    }
+                    try:
+                        response = await client.post(
+                            url,
+                            headers=headers,
+                            json={
+                                "model": model_name,
+                                "messages": openai_messages,
+                                "temperature": 0.2
+                            },
+                            timeout=30.0
+                        )
+                        if response.status_code != 200:
+                            logger.error(f"OpenRouter API returned status {response.status_code} for {model_name}: {response.text}")
+                        response.raise_for_status()
+                        res_json = response.json()
+                        ai_response = res_json["choices"][0]["message"]["content"]
+                        break
+                    except Exception as api_err:
+                        last_err = api_err
+                        logger.error(f"OpenRouter API request failed for {model_name}: {api_err}")
+                        
+                if not ai_response:
+                    if last_err:
+                        raise last_err
+                    else:
+                        raise Exception("All attempted OpenRouter models failed.")
+                        
+                thoughts.append(AgentThought(
+                    agent_name="Synthesizer Agent",
+                    thought="Received response from cloud OpenRouter model. Validated output and compiling report."
+                ))
+                
             else:
                 # Format message history for Ollama chat API
                 ollama_messages = [{"role": "system", "content": system_prompt}]
@@ -231,15 +355,18 @@ async def chat_copilot(payload: ChatRequest, db: Session = Depends(get_db)):
         if isinstance(e, httpx.HTTPStatusError):
             try:
                 err_json = e.response.json()
-                if "error" in err_json and "message" in err_json["error"]:
-                    detail_msg = f"Gemini API Error: {err_json['error']['message']}"
-                else:
-                    detail_msg = f"Gemini API HTTP {e.response.status_code}: {e.response.text[:200]}"
+                if "error" in err_json:
+                    if isinstance(err_json["error"], dict) and "message" in err_json["error"]:
+                        detail_msg = f"API Error: {err_json['error']['message']}"
+                    elif "message" in err_json:
+                        detail_msg = f"API Error: {err_json['message']}"
+                elif "message" in err_json:
+                    detail_msg = f"API Error: {err_json['message']}"
             except Exception:
-                detail_msg = f"Gemini API HTTP {e.response.status_code}"
+                detail_msg = f"API HTTP {e.response.status_code}: {e.response.text[:200]}"
                 
         fallback_msg = (
-            OLLAMA_OFFLINE_MSG if not api_key 
+            OLLAMA_OFFLINE_MSG if not active_cloud_provider 
             else f"The AI Copilot service is currently unavailable. Please verify your internet connection or check API settings.\n\n**Error Detail:** `{detail_msg}`"
         )
         return ChatResponse(
