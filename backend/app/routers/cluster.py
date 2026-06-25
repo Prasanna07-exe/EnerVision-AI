@@ -10,46 +10,50 @@ from app.models.metrics import EnergyMetric
 
 router = APIRouter(prefix="/cluster", tags=["Clustering"])
 
-def get_country_cluster_assignment(code: str, gdp_pc: float, renew_share: float, emissions: float, generation: float) -> int:
+def get_country_cluster_assignment(
+    code: str, 
+    gdp_pc: float, 
+    renew_share: float, 
+    emissions: float, 
+    generation: float,
+    coal_gen: float = 0.0,
+    gas_gen: float = 0.0,
+    nuclear_gen: float = 0.0
+) -> int:
     """
-    Deterministically assigns a country to one of 3 energy transition segments based on its
-    macroeconomic indicators and energy transition profiles.
+    Generalized data-driven classification of country energy transition segments.
+    No hardcoded country codes are used.
     
     0 = Fossil-Dependent Baseline Grids (🔴)
     1 = Rapid-Growth Developing Economies (🟢)
     2 = Industrialized Transition Leaders (🔵)
     """
-    code_upper = code.upper()
+    # Calculate derived structural metrics
+    elec_gen = generation if generation > 0 else 1.0
+    nuc_share = nuclear_gen / elec_gen
+    clean_share = renew_share + nuc_share
     
-    # Explicit Overrides for Key Countries (as requested by User)
-    group_0_codes = {"USA", "AUS", "POL", "KAZ", "SAU", "QAT", "KWT", "SGP", "RUS", "IRQ", "ARE", "OMN", "BHR", "LBY", "DZA"}
-    group_1_codes = {"IND", "CHN", "IDN", "VNM", "PAK", "BGD", "NGA", "EGY", "ZAF", "THA", "MAR", "PHL", "TUR"}
-    group_2_codes = {"NOR", "SWE", "DNK", "DEU", "FRA", "GBR", "ESP", "PRT", "CAN", "BRA", "AUT", "ISL", "FIN", "CHE", "NZL", "IRL", "NLD", "BEL"}
+    # Fossil share calculation (coal + gas share, or 1.0 - clean_share)
+    fossil_share = (coal_gen + gas_gen) / elec_gen if generation > 0 else (1.0 - clean_share)
     
-    if code_upper in group_0_codes:
-        return 0
-    if code_upper in group_1_codes:
-        return 1
-    if code_upper in group_2_codes:
+    # Category 2: Industrialized Transition Leaders (🔵)
+    # - Countries with very high renewable penetration (>= 40%)
+    # - OR high-income countries (GDP per capita >= 20000) with a high share of clean (renewable + nuclear) energy (>= 45%)
+    if renew_share >= 0.40 or (gdp_pc >= 20000 and clean_share >= 0.45):
         return 2
         
-    # Rule-based Fallback for remaining countries
-    # 1. Industrialized Transition Leaders (Group 2):
-    # - Very high renewable share (>= 40%)
-    # - Or High GDP per capita (>= 22000) and moderate-to-high renewable share (>= 25%)
-    if renew_share >= 0.40 or (gdp_pc >= 22000 and renew_share >= 0.25):
-        return 2
-        
-    # 2. Fossil-Dependent Baseline Grids (Group 0):
-    # - High GDP per capita (>= 22000) with low renewables (< 25%)
-    # - Or moderate GDP per capita (>= 8000) with extremely low renewables (< 10%)
-    # - Or high carbon intensity (emissions / generation >= 0.6 if generation > 0) and GDP per capita >= 10000
-    carbon_intensity = emissions / generation if generation > 0 else 0.0
-    if (gdp_pc >= 22000 and renew_share < 0.25) or (gdp_pc >= 8000 and renew_share < 0.10) or (gdp_pc >= 10000 and carbon_intensity >= 0.60):
+    # Category 0: Fossil-Dependent Baseline Grids (🔴)
+    # - Developed/High-income countries (GDP per capita >= 20000) that fail to meet the clean energy threshold
+    # - OR mid-to-high income countries (GDP per capita >= 6000) that are heavily dependent on fossil fuels (fossil_share >= 70% and low renewables < 20%)
+    # - OR countries with high carbon intensity per unit of electricity generated
+    carbon_intensity = emissions / elec_gen if generation > 0 else 0.0
+    
+    if (gdp_pc >= 20000 and clean_share < 0.45) or (gdp_pc >= 6000 and fossil_share >= 0.70 and renew_share < 0.20) or (gdp_pc >= 10000 and carbon_intensity >= 0.60):
         return 0
         
-    # 3. Rapid-Growth Developing Economies (Group 1):
-    # - Default for all other low-to-moderate income countries
+    # Category 1: Rapid-Growth Developing Economies (🟢)
+    # - Emerging/developing economies (GDP per capita < 20000) that are still building out their energy infrastructure (renew_share < 40%)
+    # - This is the natural baseline for developing grids
     return 1
 
 @router.get("")
@@ -87,7 +91,20 @@ def get_clusters(db: Session = Depends(get_db)):
             renew_share = float(row['renewable_share'])
             emissions = float(row['emissions'])
             generation = float(row['electricity_generation'])
-            cluster_val = get_country_cluster_assignment(code, gdp_pc, renew_share, emissions, generation)
+            coal_gen = float(row.get('coal_generation', 0.0))
+            gas_gen = float(row.get('gas_generation', 0.0))
+            nuclear_gen = float(row.get('nuclear_generation', 0.0))
+            
+            cluster_val = get_country_cluster_assignment(
+                code, 
+                gdp_pc, 
+                renew_share, 
+                emissions, 
+                generation,
+                coal_gen=coal_gen,
+                gas_gen=gas_gen,
+                nuclear_gen=nuclear_gen
+            )
             results.append({
                 "country": name,
                 "code": code,

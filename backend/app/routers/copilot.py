@@ -453,7 +453,10 @@ def download_report(country_code: str, db: Session = Depends(get_db)):
                 gdp_pc,
                 renew_share,
                 emissions,
-                generation
+                generation,
+                coal_gen=latest_m.coal_generation or 0.0,
+                gas_gen=latest_m.gas_generation or 0.0,
+                nuclear_gen=latest_m.nuclear_generation or 0.0
             )
     except Exception as e:
         logger.error(f"Clustering failed in PDF router: {e}")
