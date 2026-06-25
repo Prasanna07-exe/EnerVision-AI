@@ -10,10 +10,52 @@ from app.models.metrics import EnergyMetric
 
 router = APIRouter(prefix="/cluster", tags=["Clustering"])
 
+def get_country_cluster_assignment(code: str, gdp_pc: float, renew_share: float, emissions: float, generation: float) -> int:
+    """
+    Deterministically assigns a country to one of 3 energy transition segments based on its
+    macroeconomic indicators and energy transition profiles.
+    
+    0 = Fossil-Dependent Baseline Grids (🔴)
+    1 = Rapid-Growth Developing Economies (🟢)
+    2 = Industrialized Transition Leaders (🔵)
+    """
+    code_upper = code.upper()
+    
+    # Explicit Overrides for Key Countries (as requested by User)
+    group_0_codes = {"USA", "AUS", "POL", "KAZ", "SAU", "QAT", "KWT", "SGP", "RUS", "IRQ", "ARE", "OMN", "BHR", "LBY", "DZA"}
+    group_1_codes = {"IND", "CHN", "IDN", "VNM", "PAK", "BGD", "NGA", "EGY", "ZAF", "THA", "MAR", "PHL", "TUR"}
+    group_2_codes = {"NOR", "SWE", "DNK", "DEU", "FRA", "GBR", "ESP", "PRT", "CAN", "BRA", "AUT", "ISL", "FIN", "CHE", "NZL", "IRL", "NLD", "BEL"}
+    
+    if code_upper in group_0_codes:
+        return 0
+    if code_upper in group_1_codes:
+        return 1
+    if code_upper in group_2_codes:
+        return 2
+        
+    # Rule-based Fallback for remaining countries
+    # 1. Industrialized Transition Leaders (Group 2):
+    # - Very high renewable share (>= 40%)
+    # - Or High GDP per capita (>= 22000) and moderate-to-high renewable share (>= 25%)
+    if renew_share >= 0.40 or (gdp_pc >= 22000 and renew_share >= 0.25):
+        return 2
+        
+    # 2. Fossil-Dependent Baseline Grids (Group 0):
+    # - High GDP per capita (>= 22000) with low renewables (< 25%)
+    # - Or moderate GDP per capita (>= 8000) with extremely low renewables (< 10%)
+    # - Or high carbon intensity (emissions / generation >= 0.6 if generation > 0) and GDP per capita >= 10000
+    carbon_intensity = emissions / generation if generation > 0 else 0.0
+    if (gdp_pc >= 22000 and renew_share < 0.25) or (gdp_pc >= 8000 and renew_share < 0.10) or (gdp_pc >= 10000 and carbon_intensity >= 0.60):
+        return 0
+        
+    # 3. Rapid-Growth Developing Economies (Group 1):
+    # - Default for all other low-to-moderate income countries
+    return 1
+
 @router.get("")
 def get_clusters(db: Session = Depends(get_db)):
     """
-    Computes KMeans clustering dynamically on country metrics (GDP per capita,
+    Computes clustering on country metrics (GDP per capita,
     renewable share, carbon intensity, and energy intensity) for the latest year.
     """
     latest_year = db.query(func.max(EnergyMetric.year)).scalar()
@@ -25,25 +67,12 @@ def get_clusters(db: Session = Depends(get_db)):
         f"SELECT * FROM energy_metrics WHERE year = {latest_year}", 
         engine
     )
-    # Require at least 5 countries to run clustering cleanly
     if df_raw.empty or len(df_raw) < 5:
         return []
 
     # Calculate basic derived indicators for clustering features
     df_raw['gdp_per_capita'] = (df_raw['gdp'] / df_raw['population']).clip(upper=100000.0)
     df_raw = df_raw.fillna(0.0)
-
-    # Feature space for KMeans (using 2D visual axes only)
-    features = ['gdp_per_capita', 'renewable_share']
-    X = df_raw[features].copy()
-
-    # Scale feature values to have zero mean and unit variance
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-    
-    # Fit KMeans (3 distinct clusters)
-    kmeans = KMeans(n_clusters=3, random_state=42, n_init='auto')
-    df_raw['cluster'] = kmeans.fit_predict(X_scaled)
 
     # Map country IDs back to name and ISO code
     countries = db.query(Country).all()
@@ -54,20 +83,25 @@ def get_clusters(db: Session = Depends(get_db)):
         c_id = int(row['country_id'])
         if c_id in country_name_map:
             name, code = country_name_map[c_id]
+            gdp_pc = float(row['gdp_per_capita'])
+            renew_share = float(row['renewable_share'])
+            emissions = float(row['emissions'])
+            generation = float(row['electricity_generation'])
+            cluster_val = get_country_cluster_assignment(code, gdp_pc, renew_share, emissions, generation)
             results.append({
                 "country": name,
                 "code": code,
-                "gdp_per_capita": float(row['gdp_per_capita']),
-                "renewable_share": float(row['renewable_share']),
-                "emissions": float(row['emissions']),
-                "cluster": int(row['cluster'])
+                "gdp_per_capita": gdp_pc,
+                "renewable_share": renew_share,
+                "emissions": emissions,
+                "cluster": cluster_val
             })
     return results
 
 @router.get("/timeline")
 def get_cluster_timeline(db: Session = Depends(get_db)):
     """
-    Returns global KMeans cluster coordinates and assignments for all years (1990 - 2045).
+    Returns global cluster coordinates and assignments for all years (1990 - 2045).
     """
     from app.services.cache_service import CacheService
     
@@ -152,19 +186,6 @@ def get_cluster_timeline(db: Session = Depends(get_db)):
     df_combined['gdp_per_capita'] = df_combined['gdp_per_capita'].clip(upper=100000.0)
     df_combined = df_combined.fillna(0.0)
     
-    # Run global KMeans
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.cluster import KMeans
-    
-    features = ['gdp_per_capita', 'renewable_share']
-    X = df_combined[features].copy()
-    
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-    
-    kmeans = KMeans(n_clusters=3, random_state=42, n_init='auto')
-    df_combined['cluster'] = kmeans.fit_predict(X_scaled)
-    
     # Format and group results by year
     timeline_data = {}
     for idx, row in df_combined.iterrows():
@@ -174,16 +195,22 @@ def get_cluster_timeline(db: Session = Depends(get_db)):
             code = country_map[c_id].code
             year = str(int(row['year']))
             
+            gdp_pc = float(row['gdp_per_capita'])
+            renew_share = float(row['renewable_share'])
+            emissions = float(row['emissions'])
+            generation = float(row['electricity_generation'])
+            cluster_val = get_country_cluster_assignment(code, gdp_pc, renew_share, emissions, generation)
+            
             if year not in timeline_data:
                 timeline_data[year] = []
                 
             timeline_data[year].append({
                 "country": name,
                 "code": code,
-                "gdp_per_capita": float(row['gdp_per_capita']),
-                "renewable_share": float(row['renewable_share']),
-                "emissions": float(row['emissions']),
-                "cluster": int(row['cluster'])
+                "gdp_per_capita": gdp_pc,
+                "renewable_share": renew_share,
+                "emissions": emissions,
+                "cluster": cluster_val
             })
             
     CacheService.set(cache_key, timeline_data, ttl=3600)

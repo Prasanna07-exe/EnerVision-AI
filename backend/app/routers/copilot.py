@@ -437,27 +437,24 @@ def download_report(country_code: str, db: Session = Depends(get_db)):
         "gdp_per_capita": gdp_pc_val
     }
     
-    # E. Calculate KMeans Cluster Assignment
-    cluster_id = 0
-    from sklearn.cluster import KMeans
-    from sklearn.preprocessing import StandardScaler
-    from app.database import engine
+    # E. Calculate Cluster Assignment
+    cluster_id = 1
     try:
-        latest_yr_cl = db.query(func.max(EnergyMetric.year)).filter(EnergyMetric.year <= 2024).scalar() or 2024
-        df_raw_cl = pd.read_sql(f"SELECT * FROM energy_metrics WHERE year = {latest_yr_cl}", engine)
-        if not df_raw_cl.empty and len(df_raw_cl) >= 3:
-            df_raw_cl['gdp_per_capita'] = (df_raw_cl['gdp'] / df_raw_cl['population']).clip(upper=100000.0)
-            df_raw_cl = df_raw_cl.fillna(0.0)
-            features_cl = ['gdp_per_capita', 'renewable_share']
-            X_cl = df_raw_cl[features_cl].copy()
-            scaler_cl = StandardScaler()
-            X_scaled_cl = scaler_cl.fit_transform(X_cl)
-            kmeans_cl = KMeans(n_clusters=3, random_state=42, n_init='auto')
-            df_raw_cl['cluster'] = kmeans_cl.fit_predict(X_scaled_cl)
+        if latest_m:
+            gdp_pc = (latest_m.gdp / latest_m.population) if latest_m.population and latest_m.population > 0 else 0.0
+            gdp_pc = min(gdp_pc, 100000.0)
+            renew_share = latest_m.renewable_share or 0.0
+            emissions = latest_m.emissions or 0.0
+            generation = latest_m.electricity_generation or 0.0
             
-            target_row = df_raw_cl[df_raw_cl['country_id'] == country.id]
-            if not target_row.empty:
-                cluster_id = int(target_row.iloc[0]['cluster'])
+            from app.routers.cluster import get_country_cluster_assignment
+            cluster_id = get_country_cluster_assignment(
+                country.code,
+                gdp_pc,
+                renew_share,
+                emissions,
+                generation
+            )
     except Exception as e:
         logger.error(f"Clustering failed in PDF router: {e}")
 
