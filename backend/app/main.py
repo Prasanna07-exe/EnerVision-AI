@@ -34,7 +34,7 @@ app.include_router(cluster.router, prefix="/api/v1")
 app.include_router(countries.router, prefix="/api/v1")
 app.include_router(copilot.router, prefix="/api/v1")
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def read_root():
     return {
         "status": "online",
