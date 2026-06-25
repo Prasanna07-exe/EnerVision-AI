@@ -139,27 +139,45 @@ async def chat_copilot(payload: ChatRequest, db: Session = Depends(get_db)):
                     "parts": [{"text": payload.message}]
                 })
                 
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+                models_to_try = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash", "gemini-1.5-pro"]
+                ai_response = None
+                last_err = None
                 
-                try:
-                    response = await client.post(
-                        url,
-                        json={
-                            "contents": contents,
-                            "systemInstruction": {
-                                "parts": [{"text": system_prompt}]
-                            }
-                        },
-                        timeout=30.0
-                    )
-                    if response.status_code != 200:
-                        logger.error(f"Gemini API returned status {response.status_code}: {response.text}")
-                    response.raise_for_status()
-                    res_json = response.json()
-                    ai_response = res_json["candidates"][0]["content"]["parts"][0]["text"]
-                except Exception as api_err:
-                    logger.error(f"Gemini API request failed: {api_err}")
-                    raise api_err
+                for model_name in models_to_try:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+                    logger.info(f"Attempting to query Gemini model: {model_name}")
+                    try:
+                        response = await client.post(
+                            url,
+                            json={
+                                "contents": contents,
+                                "systemInstruction": {
+                                    "parts": [{"text": system_prompt}]
+                                }
+                            },
+                            timeout=30.0
+                        )
+                        # If model is not found or not supported, try the next model in the list
+                        if response.status_code == 404 or "not found" in response.text.lower() or "not supported" in response.text.lower():
+                            logger.warning(f"Model {model_name} returned 404 or not supported. Response: {response.text}. Trying next model...")
+                            continue
+                            
+                        if response.status_code != 200:
+                            logger.error(f"Gemini API returned status {response.status_code} for {model_name}: {response.text}")
+                        response.raise_for_status()
+                        res_json = response.json()
+                        ai_response = res_json["candidates"][0]["content"]["parts"][0]["text"]
+                        logger.info(f"Successfully received response using model: {model_name}")
+                        break
+                    except Exception as api_err:
+                        last_err = api_err
+                        logger.error(f"Gemini API request failed for {model_name}: {api_err}")
+                
+                if not ai_response:
+                    if last_err:
+                        raise last_err
+                    else:
+                        raise Exception("All attempted Gemini models failed or were not found.")
                 
                 thoughts.append(AgentThought(
                     agent_name="Synthesizer Agent",
