@@ -24,9 +24,9 @@ def get_country_cluster_assignment(
     Generalized data-driven classification of country energy transition segments.
     No hardcoded country codes are used.
     
-    0 = Fossil-Dependent Baseline Grids (🔴)
-    1 = Rapid-Growth Developing Economies (🟢)
-    2 = Industrialized Transition Leaders (🔵)
+    0 = Fossil-Intensive Grid Systems (🔴)
+    1 = Expanding & Transitioning Energy Systems (🟢)
+    2 = Low-Carbon & Renewable-Driven Grid Systems (🔵)
     """
     # Calculate derived structural metrics
     elec_gen = generation if generation > 0 else 1.0
@@ -36,23 +36,24 @@ def get_country_cluster_assignment(
     # Fossil share calculation (coal + gas share, or 1.0 - clean_share)
     fossil_share = (coal_gen + gas_gen) / elec_gen if generation > 0 else (1.0 - clean_share)
     
-    # Category 2: Industrialized Transition Leaders (🔵)
-    # - Countries with very high renewable penetration (>= 40%)
-    # - OR high-income countries (GDP per capita >= 20000) with a high share of clean (renewable + nuclear) energy (>= 45%)
-    if renew_share >= 0.40 or (gdp_pc >= 20000 and clean_share >= 0.45):
+    # Category 2: Low-Carbon & Renewable-Driven Grid Systems (🔵)
+    # - Countries with exceptionally high renewable penetration (>= 70%) regardless of income (e.g., Costa Rica, Paraguay)
+    # - OR mid-to-high income countries (GDP per capita >= 8000) with high renewable share (>= 40%) (e.g., Germany, UK, Canada, Brazil)
+    # - OR high-income countries (GDP per capita >= 20000) with a high clean (renewable + nuclear) energy share (>= 45%) (e.g., France, Belgium, Sweden)
+    if renew_share >= 0.70 or (gdp_pc >= 8000 and renew_share >= 0.40) or (gdp_pc >= 20000 and clean_share >= 0.45):
         return 2
         
-    # Category 0: Fossil-Dependent Baseline Grids (🔴)
-    # - Developed/High-income countries (GDP per capita >= 20000) that fail to meet the clean energy threshold
-    # - OR mid-to-high income countries (GDP per capita >= 6000) that are heavily dependent on fossil fuels (fossil_share >= 70% and low renewables < 20%)
+    # Category 0: Fossil-Intensive Grid Systems (🔴)
+    # - Developed/High-income countries (GDP per capita >= 20000) that fail to meet the clean energy threshold (e.g., USA, Australia, Singapore, Saudi Arabia)
+    # - OR mid-to-high income countries (GDP per capita >= 6000) heavily dependent on fossil fuels (fossil_share >= 70% and low renewables < 20%) (e.g., Poland, Russia, Kazakhstan)
     # - OR countries with high carbon intensity per unit of electricity generated
     carbon_intensity = emissions / elec_gen if generation > 0 else 0.0
     
     if (gdp_pc >= 20000 and clean_share < 0.45) or (gdp_pc >= 6000 and fossil_share >= 0.70 and renew_share < 0.20) or (gdp_pc >= 10000 and carbon_intensity >= 0.60):
         return 0
         
-    # Category 1: Rapid-Growth Developing Economies (🟢)
-    # - Emerging/developing economies (GDP per capita < 20000) that are still building out their energy infrastructure (renew_share < 40%)
+    # Category 1: Expanding & Transitioning Energy Systems (🟢)
+    # - Emerging/developing economies (GDP per capita < 20000) that are still building out their energy infrastructure (e.g., India, China, Vietnam, Cambodia)
     # - This is the natural baseline for developing grids
     return 1
 

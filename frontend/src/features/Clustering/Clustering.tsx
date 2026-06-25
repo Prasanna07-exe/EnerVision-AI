@@ -15,9 +15,9 @@ import { Layers, Globe, Play, Pause, Sparkles, TrendingUp } from "lucide-react";
 
 const CLUSTER_COLORS = ["#ff416c", "#39ff14", "#00f2fe"];
 const CLUSTER_NAMES = [
-  "Fossil-Dependent Baseline Grids",
-  "Rapid-Growth Developing Economies",
-  "Industrialized Transition Leaders"
+  "Fossil-Intensive Grid Systems",
+  "Expanding & Transitioning Energy Systems",
+  "Low-Carbon & Renewable-Driven Grid Systems"
 ];
 
 export const Clustering: React.FC = () => {
