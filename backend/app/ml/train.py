@@ -476,7 +476,7 @@ def train_and_forecast_all(db: Session):
                 ensemble_preds = np.clip(ensemble_preds, 0.0, None)
 
             # Save the ensemble forecast
-            save_forecast('ensemble', ensemble_preds, ensemble_mape, best_lower, best_upper)
+            save_forecast('ensemble', ensemble_preds, ensemble_mape)
             
             db.commit()
 
