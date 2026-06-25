@@ -133,72 +133,69 @@ def run_etl(db: Session, max_rows: int = None):
     logger.info("Starting database loading...")
     unique_countries = df_merged[['iso_code', 'country']].drop_duplicates().values
     
+    # Pre-fetch all countries to avoid N+1 queries
+    logger.info("Fetching existing countries from database...")
+    existing_countries = {c.code: c for c in db.query(Country).all()}
+    
     # Seed Countries
     country_map = {} # Maps code -> DB Country ID
     logger.info(f"Upserting {len(unique_countries)} countries...")
+    new_countries = []
     for iso_code, country_name in unique_countries:
-        # Simple upsert
-        country_db = db.query(Country).filter(Country.code == iso_code).first()
+        country_db = existing_countries.get(iso_code)
         if not country_db:
             country_db = Country(
                 code=iso_code,
                 name=country_name,
-                region="Global" # Default region
+                region="Global"
             )
             db.add(country_db)
-            db.commit()
-            db.refresh(country_db)
-        country_map[iso_code] = country_db.id
+            new_countries.append(country_db)
+        else:
+            country_map[iso_code] = country_db.id
+
+    if new_countries:
+        db.commit()
+        for c in new_countries:
+            country_map[c.code] = c.id
+
+    # Clean existing energy metrics to perform a clean bulk insert
+    logger.info("Clearing existing energy metrics for a clean bulk seed...")
+    db.execute(text("DELETE FROM energy_metrics"))
+    db.commit()
 
     # Seed Energy Metrics
-    logger.info("Seeding energy metrics...")
-    metrics_records = []
+    logger.info("Preparing energy metrics for bulk insert...")
     
-    # Cap total rows for debugging/quick seed if specified
     data_rows = df_merged
     if max_rows:
         data_rows = df_merged.head(max_rows)
 
-    count = 0
+    metrics_to_insert = []
     for idx, row in data_rows.iterrows():
         country_id = country_map.get(row['iso_code'])
         if not country_id:
             continue
 
-        year = int(row['year'])
-        
-        # Check if record already exists to perform update (upsert)
-        metric_db = db.query(EnergyMetric).filter(
-            EnergyMetric.country_id == country_id,
-            EnergyMetric.year == year
-        ).first()
+        metrics_to_insert.append({
+            "country_id": country_id,
+            "year": int(row['year']),
+            "gdp": float(row['gdp']) if pd.notna(row['gdp']) else None,
+            "population": float(row['population']) if pd.notna(row['population']) else None,
+            "electricity_generation": float(row['electricity_generation']),
+            "solar_generation": float(row['solar_electricity']) if 'solar_electricity' in row else 0.0,
+            "wind_generation": float(row['wind_electricity']) if 'wind_electricity' in row else 0.0,
+            "hydro_generation": float(row['hydro_electricity']) if 'hydro_electricity' in row else 0.0,
+            "coal_generation": float(row['coal_electricity']) if 'coal_electricity' in row else 0.0,
+            "gas_generation": float(row['gas_electricity']) if 'gas_electricity' in row else 0.0,
+            "nuclear_generation": float(row['nuclear_electricity']) if 'nuclear_electricity' in row else 0.0,
+            "emissions": float(row['emissions_clean']),
+            "ev_sales_share": float(row['ev_sales_share']),
+            "renewable_share": float(row['derived_renewable_share'])
+        })
 
-        if not metric_db:
-            metric_db = EnergyMetric(
-                country_id=country_id,
-                year=year
-            )
-            db.add(metric_db)
-
-        # Populate/update fields
-        metric_db.gdp = float(row['gdp']) if pd.notna(row['gdp']) else None
-        metric_db.population = float(row['population']) if pd.notna(row['population']) else None
-        metric_db.electricity_generation = float(row['electricity_generation'])
-        metric_db.solar_generation = float(row['solar_electricity']) if 'solar_electricity' in row else 0.0
-        metric_db.wind_generation = float(row['wind_electricity']) if 'wind_electricity' in row else 0.0
-        metric_db.hydro_generation = float(row['hydro_electricity']) if 'hydro_electricity' in row else 0.0
-        metric_db.coal_generation = float(row['coal_electricity']) if 'coal_electricity' in row else 0.0
-        metric_db.gas_generation = float(row['gas_electricity']) if 'gas_electricity' in row else 0.0
-        metric_db.nuclear_generation = float(row['nuclear_electricity']) if 'nuclear_electricity' in row else 0.0
-        metric_db.emissions = float(row['emissions_clean'])
-        metric_db.ev_sales_share = float(row['ev_sales_share'])
-        metric_db.renewable_share = float(row['derived_renewable_share'])
-
-        count += 1
-        if count % 1000 == 0:
-            db.commit()
-            logger.info(f"Seeded {count} metrics records...")
-
+    logger.info(f"Bulk inserting {len(metrics_to_insert)} metrics records...")
+    db.bulk_insert_mappings(EnergyMetric, metrics_to_insert)
     db.commit()
-    logger.info(f"ETL Complete. Total seeded metrics records: {count}")
-    return count
+    logger.info(f"ETL Complete. Total bulk inserted metrics records: {len(metrics_to_insert)}")
+    return len(metrics_to_insert)
