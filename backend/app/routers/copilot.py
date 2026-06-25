@@ -121,9 +121,10 @@ async def chat_copilot(payload: ChatRequest, db: Session = Depends(get_db)):
     try:
         async with httpx.AsyncClient() as client:
             if api_key:
+                key_masked = f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else "too_short"
                 thoughts.append(AgentThought(
                     agent_name="Orchestrator Agent",
-                    thought="Assembled data context. Dispatching prompt to cloud Google Gemini model..."
+                    thought=f"Assembled data context. Dispatching prompt to cloud Google Gemini model (Key: {key_masked})..."
                 ))
                 
                 # Format message history for Google Gemini API
