@@ -435,15 +435,39 @@ def train_and_forecast_all(db: Session):
                               lower_arr=lstm_lower_future.get(api_metric),
                               upper_arr=lstm_upper_future.get(api_metric))
             
-            # Calculate the ensemble prediction as a weighted combination of all three models:
-            # 40% Linear Regression (for trend extrapolation), 30% LSTM, 30% XGBoost.
-            # If LSTM failed to train, we use 60% Linear Regression, 40% XGBoost.
-            if has_lstm and lstm_preds is not None:
-                ensemble_preds = 0.4 * lr_preds + 0.3 * lstm_preds + 0.3 * xgb_preds
-                ensemble_mape = 0.4 * lr_mape + 0.3 * lstm_mape + 0.3 * xgb_mape
-            else:
-                ensemble_preds = 0.6 * lr_preds + 0.4 * xgb_preds
-                ensemble_mape = 0.6 * lr_mape + 0.4 * xgb_mape
+            # Calculate dynamic weights based on validation MAPEs (inverse-MAPE weighting)
+            mapes = {}
+            preds = {}
+            
+            mapes['xgboost'] = max(xgb_mape, 0.1)
+            preds['xgboost'] = xgb_preds
+            
+            if prophet_model.model is not None and prophet_mape < 999:
+                mapes['prophet'] = max(prophet_mape, 0.1)
+                preds['prophet'] = prophet_preds
+                
+            mapes['linear_regression'] = max(lr_mape, 0.1)
+            preds['linear_regression'] = lr_preds
+            
+            if has_lstm and lstm_preds is not None and lstm_mape < 999:
+                mapes['lstm'] = max(lstm_mape, 0.1)
+                preds['lstm'] = lstm_preds
+                
+            # Compute inverse MAPEs
+            inv_mapes = {m: 1.0 / mape for m, mape in mapes.items()}
+            sum_inv = sum(inv_mapes.values())
+            weights = {m: inv / sum_inv for m, inv in inv_mapes.items()}
+            
+            # Print weights for auditing
+            weights_str = ", ".join([f"{m}: {w*100:.1f}%" for m, w in weights.items()])
+            logger.info(f"  Ensemble Weights for {country.code} ({api_metric}) -> {weights_str}")
+            
+            # Compute weighted ensemble forecasts and MAPE
+            ensemble_preds = np.zeros_like(xgb_preds)
+            ensemble_mape = 0.0
+            for m, w in weights.items():
+                ensemble_preds += w * preds[m]
+                ensemble_mape += w * mapes[m]
 
             # Clip the ensemble predictions
             if raw_metric == 'renewable_share':
