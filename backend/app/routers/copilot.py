@@ -264,7 +264,7 @@ async def chat_copilot(payload: ChatRequest, db: Session = Depends(get_db)):
                     openai_messages.append({"role": role, "content": msg.content})
                 openai_messages.append({"role": "user", "content": payload.message})
                 
-                openrouter_models = ["google/gemini-2.0-flash-exp:free", "meta-llama/llama-3-8b-instruct:free", "google/gemma-2-9b-it:free"]
+                openrouter_models = ["openrouter/free", "meta-llama/llama-3.1-8b-instruct:free", "meta-llama/llama-3.2-3b-instruct:free", "google/gemma-2-9b-it:free"]
                 ai_response = None
                 last_err = None
                 
